@@ -1,0 +1,10 @@
+^G:\UNIVERSITY\JUNIOR\GRAPHICS\TASK\TASK1\POINTPICKER\BUILD\CMAKEFILES\0109D0688376B6E5DE01AC6BD57B99A2\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SG:/university/Junior/Graphics/task/Task1/PointPicker/src -BG:/university/Junior/Graphics/task/Task1/PointPicker/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file G:/university/Junior/Graphics/task/Task1/PointPicker/build/PointPicker.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
