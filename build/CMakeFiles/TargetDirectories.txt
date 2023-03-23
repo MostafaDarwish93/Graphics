@@ -1,3 +1,0 @@
-G:/university/Junior/Graphics/task/Task1/PointPicker/build/CMakeFiles/PointPicker.dir
-G:/university/Junior/Graphics/task/Task1/PointPicker/build/CMakeFiles/ALL_BUILD.dir
-G:/university/Junior/Graphics/task/Task1/PointPicker/build/CMakeFiles/ZERO_CHECK.dir
