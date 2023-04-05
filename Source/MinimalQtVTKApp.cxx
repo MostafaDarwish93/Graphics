@@ -1,53 +1,61 @@
-#include <vtkActor.h> // Includes the header file for vtkActor class
-#include <vtkInteractorStyleTrackballCamera.h> // Includes the header file for vtkInteractorStyleTrackballCamera class
-#include <vtkNamedColors.h> // Includes the header file for vtkNamedColors class
-#include <vtkNew.h> // Includes the header file for vtkNew macro
-#include <vtkObjectFactory.h> // Includes the header file for vtkObjectFactory class
-#include <vtkPointPicker.h> // Includes the header file for vtkPointPicker class
-#include <vtkPolyDataMapper.h> // Includes the header file for vtkPolyDataMapper class
-#include <vtkProperty.h> // Includes the header file for vtkProperty class
-#include <vtkRenderWindow.h> // Includes the header file for vtkRenderWindow class
-#include <vtkRenderWindowInteractor.h> // Includes the header file for vtkRenderWindowInteractor class
-#include <vtkRenderer.h> // Includes the header file for vtkRenderer class
-#include <vtkRendererCollection.h> // Includes the header file for vtkRendererCollection class
-#include <vtkSphereSource.h> // Includes the header file for vtkSphereSource class
-#include <vtkLineSource.h> // Includes the header file for vtkLineSource class
-#include <vtkSmartPointer.h> // Includes the header file for vtkSmartPointer class
-#include <vtkTextRepresentation.h> // Includes the header file for vtkTextRepresentation class
-#include <vtkSmartPointer.h> // Includes the header file for vtkSmartPointer class (repeated)
-#include <vtkTextWidget.h> // Includes the header file for vtkTextWidget class
-#include <vtkTextActor.h> // Includes the header file for vtkTextActor class
-#include <vtkTextProperty.h> // Includes the header file for vtkTextProperty class
+#include <vtkActor.h> 
+#include <vtkInteractorStyleTrackballCamera.h> 
+#include <vtkNamedColors.h> 
+#include <vtkNew.h> 
+#include <vtkObjectFactory.h>
+#include <vtkPointPicker.h>
+#include <vtkPolyDataMapper.h> 
+#include <vtkProperty.h> 
+#include <vtkRenderWindow.h> 
+#include <vtkRenderWindowInteractor.h> 
+#include <vtkRenderer.h>
+#include <vtkRendererCollection.h> 
+#include <vtkSphereSource.h> 
+#include <vtkLineSource.h> 
+#include <vtkSmartPointer.h> 
+#include <vtkTextRepresentation.h>
+#include <vtkTextWidget.h> 
+#include <vtkTextActor.h>
+#include <vtkTextProperty.h>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkDataSetMapper.h>
+#include <iostream>
+#include <vtkCellPicker.h>
 
-
-
-#include <QApplication> // Includes the header file for QApplication class
-#include <QDockWidget> // Includes the header file for QDockWidget class
-#include <QGridLayout> // Includes the header file for QGridLayout class
-#include <QLabel> // Includes the header file for QLabel class
-#include <QMainWindow> // Includes the header file for QMainWindow class
-#include <QPointer> // Includes the header file for QPointer class
-#include <QPushButton> // Includes the header file for QPushButton class
-#include <QVBoxLayout> // Includes the header file for QVBoxLayout class
+#include <QApplication> 
+#include <QDockWidget>
+#include <QGridLayout> 
+#include <QLabel> 
+#include <QMainWindow> 
+#include <QPointer> 
+#include <QPushButton> 
+#include <QVBoxLayout> 
 #include <QFileDialog> 
+#include <QInputDialog>
 #include <qcombobox.h>
-
-
-
+#include <vtkRegularPolygonSource.h>
+using namespace std;
 
 double picked[3]; // Declares an array of 3 doubles called "picked"
-
+int inc = 0;
 
 vtkSmartPointer<vtkActor> Lineactor;
+//vtkSmartPointer<vtkActor> CircleActor;
+std::vector<vtkSmartPointer<vtkActor>> lineActors;
 
 vtkNew<vtkGenericOpenGLRenderWindow> window;
 
-
 // Create a new instance of vtkLineSource using smart pointers
 vtkSmartPointer<vtkLineSource> lineSource = vtkSmartPointer<vtkLineSource>::New();
+
+// Create global variables for the circle actor and mapper
+vtkSmartPointer<vtkActor> Circle_actor = vtkSmartPointer<vtkActor>::New();
+vtkSmartPointer<vtkPolyDataMapper> Circle_mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+
+// Create global variables for the polygon actor and mapper
+vtkSmartPointer<vtkActor> Polygon_actor = vtkSmartPointer<vtkActor>::New();
+vtkSmartPointer<vtkPolyDataMapper> Polygon_mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
 
 // Create a new instance of vtkRenderWindowInteractor using vtkNew macro
 vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
@@ -58,89 +66,296 @@ vtkSmartPointer<vtkRenderer> renderer = vtkSmartPointer<vtkRenderer>::New();
 // Create a new instance of vtkTextWidget using smart pointers
 vtkSmartPointer<vtkTextWidget> textWidget = vtkSmartPointer<vtkTextWidget>::New();
 
-// Create a new instance of vtkRenderWindow using smart pointers
-//vtkSmartPointer<vtkRenderWindow> renderWindow = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
-
 // Define interaction style
     // 
+
+void Draw_circle(double x, double y)
+{
+    // Get the radius of the circle from the user using a QInputDialog
+    bool ok;
+    double radius = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the circle:", 1.0, 0.0, 100.0, 2, &ok);
+    if (!ok) {
+        return;
+    }
+
+    // Update the center and radius of the circle source
+    vtkSmartPointer<vtkRegularPolygonSource> circleSource = vtkSmartPointer<vtkRegularPolygonSource>::New();
+    circleSource->SetNumberOfSides(50);
+    circleSource->SetCenter(x, y, 0);
+    circleSource->SetRadius(radius);
+    circleSource->Update();
+
+    // Update the mapper with the new data
+    Circle_mapper->SetInputConnection(circleSource->GetOutputPort());
+    Circle_mapper->Update();
+
+    // Update the actor with the new mapper
+    Circle_actor->SetMapper(Circle_mapper);
+    Circle_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+
+    // Add the actor to the renderer
+    renderer->AddActor(Circle_actor);
+    window->AddRenderer(renderer);
+}
+
+
+
+
+void Draw_Polygon() {
+    // Prompt the user for the number of sides of the polygon
+    bool ok;
+    int numSides = QInputDialog::getInt(nullptr, "Enter Number of Sides", "Enter the number of sides of the polygon:", 3, 3, 100, 1, &ok);
+    if (!ok) {
+        return;
+    }
+
+    // Prompt the user for the radius of the polygon
+    double radius = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the polygon:", 1.0, 0.0, 100.0, 2, &ok);
+    if (!ok) {
+        return;
+    }
+
+    // Prompt the user for the length of the polygon
+    double length = QInputDialog::getDouble(nullptr, "Enter Length", "Enter the length of the polygon:", 1.0, 0.0, 100.0, 2, &ok);
+    if (!ok) {
+        return;
+    }
+
+    // Calculate the apothem of the polygon
+    double apothem = length / (2 * tan(M_PI / numSides));
+
+    // Create a vtkRegularPolygonSource with the given number of sides and apothem
+    vtkSmartPointer<vtkRegularPolygonSource> polySource = vtkSmartPointer<vtkRegularPolygonSource>::New();
+    polySource->SetNumberOfSides(numSides);
+    polySource->SetRadius(apothem);
+    polySource->Update();
+
+    // Update the mapper with the new data
+    Polygon_mapper->SetInputConnection(polySource->GetOutputPort());
+    Polygon_mapper->Update();
+
+    // Update the actor with the new mapper
+    Polygon_actor->SetMapper(Polygon_mapper);
+
+    // Set the actor color to green by default
+    Polygon_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+
+    // Add the actor to the renderer
+    renderer->AddActor(Polygon_actor);
+    window->AddRenderer(renderer);
+}
+
+
+void Draw_Ellipse()
+{
+}
+
+
     // Define a function to change the color of the line
-void ChangeColor(QComboBox* comboBox, vtkActor* actor, vtkLineSource* line)
+void ChangeColor(QComboBox* comboBox, vtkActor* actor)
 {
     QString color_name = comboBox->currentText();
 
     if (color_name == "Red")
     {
         actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
-
+        Circle_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        Polygon_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
     }
     else if (color_name == "Green")
     {
         actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        Circle_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        Polygon_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
     }
     else if (color_name == "Blue")
     {
         actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+        Circle_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+        Polygon_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
     }
     else if (color_name == "Yellow")
     {
         actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+        Circle_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+        Polygon_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
     }
     else if (color_name == "Magenta")
     {
         actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+        Circle_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+        Polygon_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
     }
     window->Render();
 }
 
 void UpdateLineThickness(int thickness, vtkActor* actor) {
     actor->GetProperty()->SetLineWidth(thickness);
+    Circle_actor->GetProperty()->SetLineWidth(thickness);
+    Polygon_actor->GetProperty()->SetLineWidth(thickness);
     actor->GetMapper()->Update();
     window->Render();
 }
 
-
 // Save Function
-void Save(const char* filename) {
+
+
+void Save(vtkActor* actor) {
     // Get the start and end points of the line
     double* startPoint = lineSource->GetPoint1();
     double* endPoint = lineSource->GetPoint2();
 
-    // Open the output file for writing
-    std::ofstream outputFile(filename);
+    // Get the color and thickness of the line
+    double* color = actor->GetProperty()->GetColor();
+    double thickness = actor->GetProperty()->GetLineWidth();
+    string color_name;
 
-    // Write the start and end points to the output file
-    outputFile << "Start point: " << startPoint[0] << ", " << startPoint[1] << std::endl;
-    outputFile << "End point: " << endPoint[0] << ", " << endPoint[1] << std::endl;
+    // Get the name of the color based on its RGB value
+    if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+        color_name = "Red";
+    }
+    else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+        color_name = "Green";
+    }
+    else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+        color_name = "Blue";
+    }
+    else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+        color_name = "Yellow";
+    }
+    else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+        color_name = "Magenta";
+    }
+    else {
+        color_name = "Unknown";
+    }
+    // Open a file dialog to let the user choose the output file
+    QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
 
-    // Close the output file
-    outputFile.close();
+    // If the user didn't cancel the file dialog, write to the output file
+    if (!filename.isEmpty()) {
+        // Open the output file for writing
+        std::ofstream outputFile(filename.toStdString());
+
+        // Write the start and end points, color, and thickness to the output file
+        outputFile << "Start point: " << startPoint[0] << ", " << startPoint[1] << std::endl;
+        outputFile << "End point: " << endPoint[0] << ", " << endPoint[1] << std::endl;
+        outputFile << "Color: " << color_name << std::endl;
+        outputFile << "Thickness: " << thickness << std::endl;
+
+        // Close the output file
+        outputFile.close();
+    }
 }
 
 // Upload Function
-void Upload() {
+void Upload(vtkActor* actor) {
+    // Open a file dialog to select a text file
     QString fileName = QFileDialog::getOpenFileName(nullptr, "Load Line", "", "Text Files (*.txt)");
+    // If no file is selected, return from the function
     if (fileName.isEmpty()) {
         return;
     }
-
+    // Open the selected file in read-only mode and text mode
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         std::cerr << "Error: Failed to open file for reading." << std::endl;
         return;
     }
 
+    // Create a QTextStream object to read the file
     QTextStream in(&file);
-    double x1, y1, z1, x2, y2, z2;
-    in >> x1 >> y1 >> z1;
-    in >> x2 >> y2 >> z2;
+    QString line;
 
-    //vtkSmartPointer<vtkLineSource> lineSource = vtkSmartPointer<vtkLineSource>::New();
-    // Set the first and second endpoints of the line using the coordinates read from the file
-    lineSource->SetPoint1(x1, y1, 0);
-    lineSource->SetPoint2(x2, y2, 0);
-    //window->Render();
-
+    // Read the file line by line
+    while (!in.atEnd()) {
+        // Get the current line from the file
+        line = in.readLine();
+        // Check if the line contains the start point coordinates
+        if (line.startsWith("Start point:")) {
+            // Extract the coordinates from the line and set the start point of the line source
+            QStringList coords = line.section(":", 1).split(",");
+            double x1 = coords[0].toDouble();
+            double y1 = coords[1].toDouble();
+            lineSource->SetPoint1(x1, y1, 0);
+        }
+        // Check if the line contains the end point coordinates
+        else if (line.startsWith("End point:")) {
+            // Extract the coordinates from the line and set the end point of the line source
+            QStringList coords = line.section(":", 1).split(",");
+            double x2 = coords[0].toDouble();
+            double y2 = coords[1].toDouble();
+            lineSource->SetPoint2(x2, y2, 0);
+        }
+        // Check if the line contains the color information
+        else if (line.startsWith("Color:")) {
+            // Extract the color values from the line and set the color of the actor based on the color name
+            QStringList colorValues = line.section(":", 1).trimmed().split(" ");
+            string color = colorValues.at(0).toStdString();
+            if (color == "Red") {
+                actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            }
+            else if (color == "Blue") {
+                actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            }
+            else if (color == "Yellow") {
+                actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            }
+            else if (color == "Green") {
+                actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            }
+            else if (color == "Magenta") {
+                actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            }
+        }
+        // Check if the line contains the Thickness information
+        else if (line.startsWith("Thickness:")) {
+            // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
+            int thickness = line.section(":", 1).trimmed().toInt();
+            actor->GetProperty()->SetLineWidth(thickness);
+        }
+    }
+    window->Render();
     file.close();
+}
+void Change_Shapes(QComboBox* comboBox, double* mouse)
+{
+    // Remove any existing actors from the renderer
+    renderer->RemoveAllViewProps();
+
+    QString shape_name = comboBox->currentText();
+
+    if (shape_name == "Circle")
+    {
+        // Get the x and y coordinates of the mouse click
+        double x = mouse[0];
+        double y = mouse[1];
+
+        // Pass the coordinates to the Draw_circle function
+        Draw_circle(x, y);
+    }
+    else if (shape_name == "Ellipse")
+    {
+        Draw_Ellipse();
+    }
+    else if (shape_name == "Polygon")
+    {
+        Draw_Polygon();
+    }
+    else if (shape_name == "Yellow")
+    {
+        
+    }
+    else if (shape_name == "Magenta")
+    {
+        
+    }
+    else if (shape_name == "Polyline") {
+        //Draw_Polyline();
+    }
+    // Reset the camera and render the window
+    renderer->ResetCamera();
+    window->Render();
 }
 namespace {
 
@@ -149,6 +364,7 @@ namespace {
     private:
         vtkSmartPointer<vtkLineSource> lineSource = vtkSmartPointer<vtkLineSource>::New();
         vtkSmartPointer<vtkActor> Lineactor = vtkSmartPointer<vtkActor>::New();
+        double mousePos[2] = { 0.0, 0.0 };
     public:
         static MouseInteractorStylePP* New();
         vtkTypeMacro(MouseInteractorStylePP, vtkInteractorStyleTrackballCamera);
@@ -167,24 +383,42 @@ namespace {
         vtkSmartPointer<vtkActor> getLineactor() {
             return Lineactor;
         }
+        void SetMousePos(double x, double y)
+        {
+            mousePos[0] = x;
+            mousePos[1] = y;
+        }
+        double* GetMousePos()
+        {
+            return mousePos;
+        }
         virtual void OnLeftButtonDown() override
         {
-            // Print the pixel coordinates of the mouse click event to the console
-            std::cout << "Picking pixel: " << this->Interactor->GetEventPosition()[0]
-                << " " << this->Interactor->GetEventPosition()[1] << std::endl;
+            // Get the pixel coordinates of the mouse click event
+            double x = this->Interactor->GetEventPosition()[0];
+            double y = this->Interactor->GetEventPosition()[1];
 
-            // Use the vtkPicker to pick an object in the scene at the location of the mouse click event
+            // Set the mouse coordinates
+            this->SetMousePos(x, y);
+
+            // Print the pixel coordinates of the mouse click event to the console
+           /* std::cout << "Picking pixel: " << this->Interactor->GetEventPosition()[0]
+                << " " << this->Interactor->GetEventPosition()[1] << std::endl;*/
+
+                // Use the vtkPicker to pick an object in the scene at the location of the mouse click event
             this->Interactor->GetPicker()->Pick(
-                this->Interactor->GetEventPosition()[0], // x-coordinate of the mouse click event
-                this->Interactor->GetEventPosition()[1], // y-coordinate of the mouse click event
+                x, // x-coordinate of the mouse click event
+                y, // y-coordinate of the mouse click event
                 0, // always zero (z-coordinate of the mouse click event)
                 this->Interactor->GetRenderWindow()
                 ->GetRenderers()
                 ->GetFirstRenderer() // pick from the first renderer in the render window
             );
 
+
             // Get the 3D position of the pick location
             this->Interactor->GetPicker()->GetPickPosition(picked);
+
 
             // Print the 3D coordinates of the picked location to the console
             std::cout << "Picked value: " << picked[0] << " " << picked[1] << " "
@@ -286,13 +520,12 @@ namespace {
 
 int main(int argc, char* argv[])
 {
-
     // Create a new instance of a Qt application
     QApplication app(argc, argv);
 
     // main window
     QMainWindow mainWindow;
-    mainWindow.setWindowTitle("Line Drawer");
+    mainWindow.setWindowTitle("Computer Graphics & Visualization");
     mainWindow.resize(1200, 900);
 
     // control area
@@ -334,43 +567,38 @@ int main(int argc, char* argv[])
     // Thickness Slider
     QSlider* thicknessSlider = new QSlider(Qt::Horizontal);
     thicknessSlider->setMinimum(1);
-    thicknessSlider->setMaximum(10);
+    thicknessSlider->setMaximum(20);
     thicknessSlider->setValue(1); // Set default value
     dockLayout->addWidget(thicknessSlider);
 
+    // Chooosing Shapes to draw button
+    QPushButton* changeshapes = new QPushButton("Change Shape");
+    dockLayout->addWidget(changeshapes);
+
+    // Color droplist
+    QComboBox* shapesdroplist = new QComboBox();
+    shapesdroplist->addItem("Line");
+    shapesdroplist->addItem("Polyline");
+    shapesdroplist->addItem("Polygon");
+    shapesdroplist->addItem("Regular Polygon");
+    shapesdroplist->addItem("Circle");
+    shapesdroplist->addItem("Arc");
+    shapesdroplist->addItem("Ellipse");
+    shapesdroplist->setCurrentIndex(0); // Set default value
+    dockLayout->addWidget(shapesdroplist);
 
     //Lineactor = vtkSmartPointer<vtkActor>::New(); // Fix the typo here
     vtkSmartPointer<vtkActor> Lineactor = vtkSmartPointer<vtkActor>::New();
+
+
+
 
     // render area
     QPointer<QVTKOpenGLNativeWidget> vtkRenderWidget = new QVTKOpenGLNativeWidget();
     mainWindow.setCentralWidget(vtkRenderWidget);
 
     // VTK part
-    //vtkNew<vtkGenericOpenGLRenderWindow> window;
     vtkRenderWidget->setRenderWindow(window.Get());
-
-    //// Connect Save button
-    //QString filename = "data.txt";  // Example filename
-    //QObject::connect(saveButton, &QPushButton::released, [&]() {
-    //    ::Save(filename.toStdString().c_str()); 
-    //    });
-
-    //// Connect Upload button
-    //QObject::connect(uploadButton, &QPushButton::clicked, [&]() {
-    //    ::Upload(); 
-    //    });
-
-    //// Connect Change Color 
-    //QObject::connect(changeColorButton, &QPushButton::clicked, [=]() {
-    //    ChangeColor(colorDroplist, Lineactor);
-    //    });
-
-    //// Connect Change Thickness
-    //QObject::connect(thicknessSlider, &QSlider::valueChanged, [&]() {
-    //    int thickness = thicknessSlider->value();
-    //    UpdateLineThickness(thickness, Lineactor);
-    //    });
 
     vtkNew<vtkPointPicker> pointPicker; // Create a new instance of the VTK point picker
     vtkNew<vtkDataSetMapper> mapper;
@@ -382,7 +610,7 @@ int main(int argc, char* argv[])
     vtkNew<vtkRenderer> renderer;
     renderer->AddActor(Lineactor);
     window->AddRenderer(renderer);    //add renderer to window   
-    renderer->SetBackground(0.4392, 0.502, 0.5647); // Set the background color of the renderer
+    renderer->SetBackground(0.5, 0.502, 0.5647); // Set the background color of the renderer
     window->GetInteractor()->SetPicker(pointPicker);    // connect between qt and vtk
     window->SetInteractor(vtkRenderWidget->interactor());
     window->GetInteractor()->SetInteractorStyle(style);
@@ -391,19 +619,18 @@ int main(int argc, char* argv[])
     //vtkRenderWidget->update();    //update render
     window->Render();    // Render the window
     // Connect Save button
-    QString filename = "data.txt";  // Example filename
     QObject::connect(saveButton, &QPushButton::released, [&]() {
-        ::Save(filename.toStdString().c_str());
+        ::Save(Lineactor);
         });
 
     // Connect Upload button
     QObject::connect(uploadButton, &QPushButton::clicked, [&]() {
-        ::Upload();
+        ::Upload(Lineactor);
         });
 
     // Connect Change Color 
     QObject::connect(changeColorButton, &QPushButton::clicked, [=]() {
-        ChangeColor(colorDroplist,Lineactor, lineSource);
+        ChangeColor(colorDroplist,Lineactor);
         });
 
     // Connect Change Thickness
@@ -411,10 +638,13 @@ int main(int argc, char* argv[])
         int thickness = thicknessSlider->value();
         UpdateLineThickness(thickness, Lineactor);
         });
+    double* mouse = style->GetMousePos();
+    // Connect Change Color 
+    QObject::connect(changeshapes, &QPushButton::clicked, [=]() {
+        Change_Shapes(shapesdroplist, mouse);
+        });
 
     mainWindow.show();
-    //window->GetInteractor()->Start();    // Start the render window interactor event loop
 
     return app.exec(); // Run the Qt application event loop and return the exit code
-
 }
