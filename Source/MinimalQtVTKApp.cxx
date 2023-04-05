@@ -254,6 +254,18 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Circle_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
         Polygon_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
     }
+    else if (color_name == "Black")
+    {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        Circle_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        Polygon_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color_name == "White")
+    {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        Circle_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        Polygon_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
     window->Render();
 }
 
@@ -293,6 +305,12 @@ void Save(vtkActor* actor) {
     }
     else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
         color_name = "Magenta";
+    }
+    else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+        color_name = "Black";
+    }
+    else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+        color_name = "White";
     }
     else {
         color_name = "Unknown";
@@ -374,6 +392,12 @@ void Upload(vtkActor* actor) {
             }
             else if (color == "Magenta") {
                 actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            }
+            else if (color == "Black") {
+                actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            }
+            else if (color == "White") {
+                actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
             }
         }
         // Check if the line contains the Thickness information
@@ -632,6 +656,8 @@ int main(int argc, char* argv[])
     colorDroplist->addItem("Blue");
     colorDroplist->addItem("Yellow");
     colorDroplist->addItem("Magenta");
+    colorDroplist->addItem("Black");
+    colorDroplist->addItem("White");
     colorDroplist->setCurrentIndex(0); // Set default value
     dockLayout->addWidget(colorDroplist);
 
