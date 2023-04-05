@@ -35,6 +35,7 @@
 #include <QInputDialog>
 #include <qcombobox.h>
 #include <vtkRegularPolygonSource.h>
+#include <qmessagebox.h>
 using namespace std;
 
 double picked[3]; // Declares an array of 3 doubles called "picked"
@@ -69,7 +70,7 @@ vtkSmartPointer<vtkTextWidget> textWidget = vtkSmartPointer<vtkTextWidget>::New(
 // Define interaction style
     // 
 
-void Draw_circle(double x, double y)
+void Draw_circle(double x, double y/*, vtkSmartPointer<vtkRenderer> renderer*/)
 {
     // Get the radius of the circle from the user using a QInputDialog
     bool ok;
@@ -77,6 +78,13 @@ void Draw_circle(double x, double y)
     if (!ok) {
         return;
     }
+
+    // Ask user for filled or non-filled region
+    QMessageBox messageBox;
+    messageBox.setText("Choose Region Type");
+    QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("Filled"), QMessageBox::YesRole);
+    QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("Non-Filled"), QMessageBox::YesRole);
+    messageBox.exec();
 
     // Update the center and radius of the circle source
     vtkSmartPointer<vtkRegularPolygonSource> circleSource = vtkSmartPointer<vtkRegularPolygonSource>::New();
@@ -89,19 +97,38 @@ void Draw_circle(double x, double y)
     Circle_mapper->SetInputConnection(circleSource->GetOutputPort());
     Circle_mapper->Update();
 
-    // Update the actor with the new mapper
+    // Update the actor with the new mapper and properties based on user's choice
     Circle_actor->SetMapper(Circle_mapper);
-    Circle_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    if (messageBox.clickedButton() == filledButton) {
+        Circle_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (messageBox.clickedButton() == nonFilledButton) {
+        // Set fill color to background color and opacity to 0
+        vtkSmartPointer<vtkProperty> fillProperty = vtkSmartPointer<vtkProperty>::New();
+        fillProperty->SetColor(renderer->GetBackground());
+        fillProperty->SetOpacity(1.0);
+        Circle_actor->SetProperty(fillProperty);
+
+        // Set edge color to black and width to 2
+        Circle_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        Circle_actor->GetProperty()->SetLineWidth(1.0);
+
+        // Show only the edges
+        Circle_actor->GetProperty()->EdgeVisibilityOn();
+        Circle_actor->GetProperty()->BackfaceCullingOn();
+    }
+
 
     // Add the actor to the renderer
     renderer->AddActor(Circle_actor);
-    window->AddRenderer(renderer);
+    //window->AddRenderer(renderer);
 }
 
 
 
 
-void Draw_Polygon() {
+
+void Draw_Regular_Polygon() {
     // Prompt the user for the number of sides of the polygon
     bool ok;
     int numSides = QInputDialog::getInt(nullptr, "Enter Number of Sides", "Enter the number of sides of the polygon:", 3, 3, 100, 1, &ok);
@@ -120,6 +147,12 @@ void Draw_Polygon() {
     if (!ok) {
         return;
     }
+    // Ask user for filled or non-filled region
+    QMessageBox messageBox;
+    messageBox.setText("Choose Region Type");
+    QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("Filled"), QMessageBox::YesRole);
+    QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("Non-Filled"), QMessageBox::YesRole);
+    messageBox.exec();
 
     // Calculate the apothem of the polygon
     double apothem = length / (2 * tan(M_PI / numSides));
@@ -136,13 +169,28 @@ void Draw_Polygon() {
 
     // Update the actor with the new mapper
     Polygon_actor->SetMapper(Polygon_mapper);
+    if (messageBox.clickedButton() == filledButton) {
+        Polygon_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (messageBox.clickedButton() == nonFilledButton) {
+        // Set fill color to background color and opacity to 0
+        vtkSmartPointer<vtkProperty> fillProperty = vtkSmartPointer<vtkProperty>::New();
+        fillProperty->SetColor(renderer->GetBackground());
+        fillProperty->SetOpacity(1.0);
+        Polygon_actor->SetProperty(fillProperty);
 
-    // Set the actor color to green by default
-    Polygon_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        // Set edge color to black and width to 2
+        Polygon_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        Polygon_actor->GetProperty()->SetLineWidth(1.0);
+
+        // Show only the edges
+        Polygon_actor->GetProperty()->EdgeVisibilityOn();
+        Polygon_actor->GetProperty()->BackfaceCullingOn();
+    }
 
     // Add the actor to the renderer
     renderer->AddActor(Polygon_actor);
-    window->AddRenderer(renderer);
+    //window->AddRenderer(renderer);
 }
 
 
@@ -150,6 +198,26 @@ void Draw_Ellipse()
 {
 }
 
+void Draw_Line(double x, double y) {
+    int check = 0;
+    // Increment the check variable to keep track of the number of clicks
+    check++;
+
+    // If this is the first click, set the first point and draw a temporary line
+    if (check == 1) {
+        lineSource->SetPoint1(x, y, 0.0); // Set the first endpoint of the line
+        lineSource->SetPoint2(x, y, 0.0); // Set the second endpoint of the line
+        //DrawLine();
+    }
+    // If this is the second click, set the second point, draw the final line, and reset the check variable
+    else if (check == 2) {
+        lineSource->SetPoint2(x, y, 0.0); // Set the second endpoint of the line
+        check = 0;
+        //DrawLine();
+    }
+
+
+}
 
     // Define a function to change the color of the line
 void ChangeColor(QComboBox* comboBox, vtkActor* actor)
@@ -340,15 +408,18 @@ void Change_Shapes(QComboBox* comboBox, double* mouse)
     }
     else if (shape_name == "Polygon")
     {
-        Draw_Polygon();
+        //Draw_Polygon();
     }
-    else if (shape_name == "Yellow")
+    else if (shape_name == "Line")
     {
+        double x1 = mouse[0];
+        double y1 = mouse[1];
         
+        Draw_Line(x1, y1);
     }
-    else if (shape_name == "Magenta")
+    else if (shape_name == "Regular Polygon")
     {
-        
+        Draw_Regular_Polygon();
     }
     else if (shape_name == "Polyline") {
         //Draw_Polyline();
@@ -367,8 +438,8 @@ namespace {
         double mousePos[2] = { 0.0, 0.0 };
     public:
         static MouseInteractorStylePP* New();
-        vtkTypeMacro(MouseInteractorStylePP, vtkInteractorStyleTrackballCamera);
         int check = 0;
+        vtkTypeMacro(MouseInteractorStylePP, vtkInteractorStyleTrackballCamera);
         double picked[3];
         void setlinesource(vtkSmartPointer<vtkLineSource> lSource) {
             lineSource = lSource;
@@ -590,9 +661,6 @@ int main(int argc, char* argv[])
     //Lineactor = vtkSmartPointer<vtkActor>::New(); // Fix the typo here
     vtkSmartPointer<vtkActor> Lineactor = vtkSmartPointer<vtkActor>::New();
 
-
-
-
     // render area
     QPointer<QVTKOpenGLNativeWidget> vtkRenderWidget = new QVTKOpenGLNativeWidget();
     mainWindow.setCentralWidget(vtkRenderWidget);
@@ -607,7 +675,7 @@ int main(int argc, char* argv[])
     Lineactor->SetMapper(mapper); // Set the mapper for the actor
     Lineactor->GetProperty()->SetColor(1, 0.8941, 0.8824); // Set the color of the actor's property
     vtkNew <MouseInteractorStylePP> style; // Create a new instance of a custom VTK interactor style
-    vtkNew<vtkRenderer> renderer;
+    /*vtkNew<vtkRenderer> renderer;*/
     renderer->AddActor(Lineactor);
     window->AddRenderer(renderer);    //add renderer to window   
     renderer->SetBackground(0.5, 0.502, 0.5647); // Set the background color of the renderer
