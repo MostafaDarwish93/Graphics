@@ -23,6 +23,8 @@
 #include <iostream>
 #include <vtkCellPicker.h>
 #include <vtkConeSource.h>
+#include <vtkCylinderSource.h>
+#include <vtkHexahedron.h>
 
 #include <QApplication> 
 #include <QDockWidget>
@@ -37,6 +39,8 @@
 #include <qcombobox.h>
 #include <vtkRegularPolygonSource.h>
 #include <qmessagebox.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkArcSource.h>
 using namespace std;
 
 double picked[3]; // Declares an array of 3 doubles called "picked"
@@ -45,8 +49,9 @@ bool circle_state = 0;
 bool req_poly_state = 0;
 bool ellip_state = 0;
 bool cone_state = 0;
+bool cylinder_state = 0;
+bool Hexahedron_state = 0;
 
-void Draw_Line();
 vtkSmartPointer<vtkActor> Lineactor;
 //vtkSmartPointer<vtkActor> CircleActor;
 std::vector<vtkSmartPointer<vtkActor>> lineActors;
@@ -71,6 +76,20 @@ vtkSmartPointer<vtkActor> coneActor = vtkSmartPointer<vtkActor>::New();
 vtkSmartPointer<vtkConeSource> coneSource = vtkSmartPointer<vtkConeSource>::New();
 vtkSmartPointer<vtkPolyDataMapper> coneMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
 
+// Create global variables for the Hexahedron actor 
+vtkSmartPointer<vtkActor> Hexahedron_actor = vtkSmartPointer<vtkActor>::New();
+
+// Create global variables for the A actor and mapper
+vtkSmartPointer<vtkArcSource> arcSource = vtkSmartPointer<vtkArcSource>::New();
+vtkSmartPointer<vtkPolyDataMapper> arcMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+vtkSmartPointer<vtkActor> arcActor = vtkSmartPointer<vtkActor>::New();
+
+// Create global variables for the Cylinder actor and mapper
+vtkSmartPointer<vtkCylinderSource> cylinderSource = vtkSmartPointer<vtkCylinderSource>::New();
+vtkSmartPointer<vtkPolyDataMapper> cylinderMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+vtkSmartPointer<vtkActor> cylinderActor = vtkSmartPointer<vtkActor>::New();
+vtkSmartPointer<vtkProperty> cylinderProperty = vtkSmartPointer<vtkProperty>::New();
+
 // Create a new instance of vtkRenderWindowInteractor using vtkNew macro
 vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
 
@@ -86,6 +105,7 @@ vtkSmartPointer<vtkTextWidget> textWidget = vtkSmartPointer<vtkTextWidget>::New(
 void Draw_circle(double x, double y, double radius, string mode, string color, int thickness)
 {
     // Update the center and radius of the circle source
+    circleSource->GeneratePolygonOff();
     circleSource->SetNumberOfSides(50);
     circleSource->SetCenter(x, y, 0);
     circleSource->SetRadius(radius);
@@ -203,6 +223,124 @@ void Draw_Line() {
     
 }
 
+void Draw_Arc(double x, double y, double px1, double py1, double px2, double py2, int reso, string color, int thickness) {
+    // Create a new instance of vtkArcSource using smart pointers
+    arcSource->SetCenter(x, y, 0);  // Set the center of the arc to the origin
+    arcSource->SetPoint1(px1, py1, 0);  // Set the starting point of the arc
+    arcSource->SetPoint2(px2, py2, 0);  // Set the ending point of the arc
+    arcSource->SetResolution(reso);   // Set the number of points used to draw the arc
+    arcSource->SetNegative(false);  // Set the arc to be drawn in the counterclockwise direction
+    arcSource->Update();            // Update the arc source
+
+    // Create a new instance of vtkPolyDataMapper using smart pointers
+    vtkSmartPointer<vtkPolyDataMapper> arcMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+    arcMapper->SetInputConnection(arcSource->GetOutputPort());  // Set the input connection to the arc source
+
+    // Create a new instance of vtkActor using smart pointers
+    arcActor->SetMapper(arcMapper);  // Set the mapper for the arc actor
+    if (color == "Red") {
+        arcActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        arcActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        arcActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        arcActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        arcActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        arcActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        arcActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    arcActor->GetProperty()->SetLineWidth(thickness);
+
+    // Add the arc actor to the renderer
+    renderer->AddActor(arcActor);
+
+    // Render the scene
+    window->Render();
+}
+
+void Draw_Hexahedron(string color, double thickness, string mode)
+{
+    // Define the geometry of the hexahedron
+    const double vertices[8][3] = { {0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0},
+                                   {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1} };
+    const vtkIdType faces[6][4] = { {0, 1, 2, 3}, {0, 4, 5, 1}, {1, 5, 6, 2},
+                                   {2, 6, 7, 3}, {3, 7, 4, 0}, {4, 7, 6, 5} };
+
+    // Create a source object that generates the hexahedron
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+    vtkSmartPointer<vtkCellArray> cells = vtkSmartPointer<vtkCellArray>::New();
+    for (int i = 0; i < 8; ++i) {
+        points->InsertNextPoint(vertices[i]);
+    }
+    for (int i = 0; i < 6; ++i) {
+        vtkSmartPointer<vtkHexahedron> hex = vtkSmartPointer<vtkHexahedron>::New();
+        for (int j = 0; j < 4; ++j) {
+            hex->GetPointIds()->SetId(j, faces[i][j]);
+        }
+        cells->InsertNextCell(hex);
+    }
+    vtkSmartPointer<vtkUnstructuredGrid> hexGrid = vtkSmartPointer<vtkUnstructuredGrid>::New();
+    hexGrid->SetPoints(points);
+    hexGrid->SetCells(VTK_HEXAHEDRON, cells);
+    vtkSmartPointer<vtkDataSetMapper> mapper = vtkSmartPointer<vtkDataSetMapper>::New();
+    mapper->SetInputData(hexGrid);
+
+    // Create an actor to display the hexahedron in the renderer
+    Hexahedron_actor->SetMapper(mapper);
+    if (mode == "Filled") {
+        Hexahedron_state = 1;
+    }
+    else if (mode == "Non-Filled") {
+        // Set fill color to background color and opacity to 0
+        vtkSmartPointer<vtkProperty> fillProperty = vtkSmartPointer<vtkProperty>::New();
+        fillProperty->SetColor(renderer->GetBackground());
+        fillProperty->SetOpacity(1.0);
+        Hexahedron_actor->SetProperty(fillProperty);
+
+        // Show only the edges
+        Hexahedron_actor->GetProperty()->EdgeVisibilityOn();
+        Hexahedron_actor->GetProperty()->BackfaceCullingOn();
+        Hexahedron_state = 0;
+    }
+    if (color == "Red") {
+        Hexahedron_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        Hexahedron_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        Hexahedron_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        Hexahedron_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        Hexahedron_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        Hexahedron_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        Hexahedron_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    Hexahedron_actor->GetProperty()->SetLineWidth(thickness);
+
+    // Add the actor to the renderer
+    renderer->AddActor(Hexahedron_actor);
+}
+
+
+
 void Draw_Cone(double x, double y, double height, int res, double rad, string color, int thickness, string mode) {
     coneSource->SetHeight(height);
     coneSource->SetCenter(x, y, 0);
@@ -258,6 +396,69 @@ void Draw_Cone(double x, double y, double height, int res, double rad, string co
 }
 
 
+void Draw_Cylinder(double x, double y, double height, double radius, int reso, string color, int thickness, string mode)
+{
+    // Create a new instance of vtkCylinderSource using smart pointers
+    cylinderSource->SetCenter(x, y, 0);
+    cylinderSource->SetHeight(height);
+    cylinderSource->SetRadius(radius);
+    cylinderSource->SetResolution(reso);
+
+    // Create a new instance of vtkPolyDataMapper using smart pointers
+    cylinderMapper->SetInputConnection(cylinderSource->GetOutputPort());
+    cylinderMapper->Update();
+
+    // Create a new instance of vtkActor using smart pointers
+    cylinderActor->SetMapper(cylinderMapper);
+    if (mode == "Filled") {
+        cylinder_state = 1;
+    }
+    else if (mode == "Non-Filled") {
+        // Set fill color to background color and opacity to 0
+        vtkSmartPointer<vtkProperty> fillProperty = vtkSmartPointer<vtkProperty>::New();
+        fillProperty->SetColor(renderer->GetBackground());
+        fillProperty->SetOpacity(1.0);
+        cylinderActor->SetProperty(fillProperty);
+
+        // Show only the edges
+        cylinderActor->GetProperty()->EdgeVisibilityOn();
+        cylinderActor->GetProperty()->BackfaceCullingOn();
+        cylinder_state = 0;
+    }
+    if (color == "Red") {
+        cylinderActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        cylinderActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        cylinderActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        cylinderActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        cylinderActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        cylinderActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        cylinderActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    cylinderActor->GetProperty()->SetLineWidth(thickness);
+    // Set the actor's properties
+    cylinderProperty->SetDiffuse(0.7);
+    cylinderProperty->SetSpecular(0.4);
+    cylinderProperty->SetSpecularPower(20);
+    cylinderActor->SetProperty(cylinderProperty);
+
+    // Add the actor to the renderer
+    renderer->AddActor(cylinderActor);
+}
+
+
+
     // Define a function to change the color of the line
 void ChangeColor(QComboBox* comboBox, vtkActor* actor)
 {
@@ -269,6 +470,9 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Circle_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
         Polygon_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
         coneActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        cylinderActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        Hexahedron_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        arcActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
     }
     else if (color_name == "Green")
     {
@@ -276,6 +480,9 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Circle_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
         Polygon_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
         coneActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        cylinderActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        Hexahedron_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        arcActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
     }
     else if (color_name == "Blue")
     {
@@ -283,6 +490,9 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Circle_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
         Polygon_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
         coneActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+        cylinderActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+        Hexahedron_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+        arcActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
     }
     else if (color_name == "Yellow")
     {
@@ -290,6 +500,9 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Circle_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
         Polygon_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
         coneActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+        cylinderActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+        Hexahedron_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+        arcActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
     }
     else if (color_name == "Magenta")
     {
@@ -297,6 +510,9 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Circle_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
         Polygon_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
         coneActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+        cylinderActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+        Hexahedron_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+        arcActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
     }
     else if (color_name == "Black")
     {
@@ -304,6 +520,9 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Circle_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
         Polygon_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
         coneActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        cylinderActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        Hexahedron_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        arcActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
     }
     else if (color_name == "White")
     {
@@ -311,6 +530,9 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Circle_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
         Polygon_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
         coneActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        cylinderActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        Hexahedron_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        arcActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
     }
     window->Render();
 }
@@ -320,6 +542,9 @@ void UpdateLineThickness(int thickness, vtkActor* actor) {
     Circle_actor->GetProperty()->SetLineWidth(thickness);
     Polygon_actor->GetProperty()->SetLineWidth(thickness);
     coneActor->GetProperty()->SetLineWidth(thickness);
+    cylinderActor->GetProperty()->SetLineWidth(thickness);
+    Hexahedron_actor->GetProperty()->SetLineWidth(thickness);
+    arcActor->GetProperty()->SetLineWidth(thickness);
     actor->GetMapper()->Update();
     window->Render();
 }
@@ -438,7 +663,6 @@ void Save(vtkActor* actor, QComboBox* comboBox) {
             }
             else {
                 outputFile << "Circle State: " << "Non-Filled" << std::endl;
-
             }
             // Close the output file
             outputFile.close();
@@ -501,7 +725,6 @@ void Save(vtkActor* actor, QComboBox* comboBox) {
             }
             else {
                 outputFile << "Regular Polygon State: " << "Non-Filled" << std::endl;
-
             }
             // Close the output file
             outputFile.close();
@@ -568,6 +791,190 @@ void Save(vtkActor* actor, QComboBox* comboBox) {
                 outputFile << "Cone State: " << "Non-Filled" << std::endl;
 
             }
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    else if (shape_name == "Cylinder") {
+        // Get the start and end points of the line
+        double centerX = cylinderSource->GetCenter()[0];
+        double centerY = cylinderSource->GetCenter()[1];
+        double radius = cylinderSource->GetRadius();
+        int reso = cylinderSource->GetResolution();
+        int height = cylinderSource->GetHeight();
+
+        // Get the color and thickness of the line
+        double* color = cylinderActor->GetProperty()->GetColor();
+        double thickness = cylinderActor->GetProperty()->GetLineWidth();
+        string color_name;
+
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        // Open a file dialog to let the user choose the output file
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            // Write the start and end points, color, and thickness to the output file
+            outputFile << "Cylinder" << std::endl;
+            outputFile << "Center point: " << centerX << ", " << centerY << std::endl;
+            outputFile << "Radius: " << radius << std::endl;
+            outputFile << "Height: " << height << std::endl;
+            outputFile << "Resolution: " << reso << std::endl;
+            outputFile << "Color: " << color_name << std::endl;
+            outputFile << "Thickness: " << thickness << std::endl;
+            if (cylinder_state == 1) {
+                outputFile << "Cylinder State: " << "Filled" << std::endl;
+            }
+            else {
+                outputFile << "Cylinder State: " << "Non-Filled" << std::endl;
+
+            }
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    else if (shape_name == "Hexahedron") {
+        // Define the geometry of the hexahedron
+        const double vertices[8][3] = { {0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0},
+                                   {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1} };
+        const vtkIdType faces[6][4] = { {0, 1, 2, 3}, {0, 4, 5, 1}, {1, 5, 6, 2},
+                                   {2, 6, 7, 3}, {3, 7, 4, 0}, {4, 7, 6, 5} };
+
+        // Get the color and thickness of the line
+        double* color = Hexahedron_actor->GetProperty()->GetColor();
+        double thickness = Hexahedron_actor->GetProperty()->GetLineWidth();
+        string color_name;
+
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+
+        // Open a file dialog to let the user choose the output file
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            // Write the vertices and faces to the output file
+            outputFile << "Hexahedron" << std::endl;
+            for (int i = 0; i < 8; ++i) {
+                outputFile << "Vertex " << i << ": " << vertices[i][0] << " " << vertices[i][1] << " " << vertices[i][2] << std::endl;
+            }
+            for (int i = 0; i < 6; ++i) {
+                outputFile << "Face " << i << ": " << faces[i][0] << " " << faces[i][1] << " " << faces[i][2] << " " << faces[i][3] << std::endl;
+            }
+            outputFile << "Color: " << color_name << std::endl;
+            outputFile << "Thickness: " << thickness << std::endl;
+            outputFile.close();
+        }
+    }
+    else if (shape_name == "Arc") {
+        // Get the start and end points of the line
+        double centerX = arcSource->GetCenter()[0];
+        double centerY = arcSource->GetCenter()[1];
+        double point1X = arcSource->GetPoint1()[0];
+        double point1Y = arcSource->GetPoint1()[1];
+        double point2X = arcSource->GetPoint2()[0];
+        double point2Y = arcSource->GetPoint2()[1];
+        int reso = arcSource->GetResolution();
+
+        // Get the color and thickness of the line
+        double* color = arcActor->GetProperty()->GetColor();
+        double thickness = arcActor->GetProperty()->GetLineWidth();
+        string color_name;
+
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        // Open a file dialog to let the user choose the output file
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            // Write the start and end points, color, and thickness to the output file
+            outputFile << "Arc" << std::endl;
+            outputFile << "Center point: " << centerX << ", " << centerY << std::endl;
+            outputFile << "Point 1: " << point1X << ", " << point1Y << std::endl;
+            outputFile << "Point 2: " << point2X << ", " << point2Y << std::endl;
+            outputFile << "Resolution: " << reso << std::endl;
+            outputFile << "Color: " << color_name << std::endl;
+            outputFile << "Thickness: " << thickness << std::endl;
             // Close the output file
             outputFile.close();
         }
@@ -681,7 +1088,6 @@ void Upload(vtkActor* actor) {
             else if (line.startsWith("Thickness:")) {
                 // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
                 thickness = line.section(":", 1).trimmed().toInt();
-
             }
             // Check if the circle is filled
             else if (line.startsWith("Circle State:")) {
@@ -782,6 +1188,124 @@ void Upload(vtkActor* actor) {
         }
         Draw_Cone(x, y, height, reso, radius, color, thickness, state);
     }
+    else if (line.startsWith("Cylinder")) {
+        !in.atEnd();
+        double x, y, radius, height;
+        int reso;
+        string color;
+        int thickness;
+        string state;
+        while (!in.atEnd()) {
+            line = in.readLine();
+            // Check if the line contains the center point coordinates
+            if (line.startsWith("Center point:")) {
+                // Extract the coordinates from the line and set the start point of the line source
+                QStringList coords = line.section(":", 1).split(",");
+                x = coords[0].toDouble();
+                y = coords[1].toDouble();
+            }
+            // Check if the line contains the radius information
+            else if (line.startsWith("Radius:")) {
+                // Extract the radius value from the line and set the radius of the circle source
+                radius = line.section(":", 1).trimmed().toDouble();
+            }
+            else if (line.startsWith("Height:")) {
+                height = line.section(":", 1).trimmed().toDouble();
+            }
+            else if (line.startsWith("Resolution:")) {
+                reso = line.section(":", 1).trimmed().toInt();
+            }
+            // Check if the line contains the color information
+            else if (line.startsWith("Color:")) {
+                // Extract the color values from the line and set the color of the actor based on the color name
+                QStringList colorValues = line.section(":", 1).trimmed().split(" ");
+                color = colorValues.at(0).toStdString();
+            }
+            // Check if the line contains the Thickness information
+            else if (line.startsWith("Thickness:")) {
+                // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
+                thickness = line.section(":", 1).trimmed().toInt();
+
+            }
+            // Check if the circle is filled
+            else if (line.startsWith("Cylinder State:")) {
+                // Extract the circle state value from the line and set the actor state based on the circle state
+                state = line.section(":", 1).trimmed().toStdString();
+            }
+        }
+        Draw_Cylinder(x, y, height, radius, reso, color, thickness, state);
+    }
+    else if (line.startsWith("Hexahedron")) {
+        !in.atEnd();
+        string color;
+        int thickness;
+        string state;
+        while (!in.atEnd()) {
+            line = in.readLine();
+            // Check if the line contains the color information
+            if (line.startsWith("Color:")) {
+                // Extract the color values from the line and set the color of the actor based on the color name
+                QStringList colorValues = line.section(":", 1).trimmed().split(" ");
+                color = colorValues.at(0).toStdString();
+            }
+            // Check if the line contains the Thickness information
+            else if (line.startsWith("Thickness:")) {
+                // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
+                thickness = line.section(":", 1).trimmed().toInt();
+
+            }
+            // Check if the circle is filled
+            else if (line.startsWith("Cylinder State:")) {
+                // Extract the circle state value from the line and set the actor state based on the circle state
+                state = line.section(":", 1).trimmed().toStdString();
+            }
+        }
+        Draw_Hexahedron(color, thickness, state);
+    }
+    else if (line.startsWith("Arc")) {
+        !in.atEnd();
+        double x, y, px1, py1, px2, py2;
+        string color;
+        int thickness, reso;
+        while (!in.atEnd()) {
+            line = in.readLine();
+            // Check if the line contains the center point coordinates
+            if (line.startsWith("Center point:")) {
+                // Extract the coordinates from the line and set the start point of the line source
+                QStringList coords = line.section(":", 1).split(",");
+                x = coords[0].toDouble();
+                y = coords[1].toDouble();
+            }
+            else if (line.startsWith("Point 1:")) {
+                // Extract the coordinates from the line and set the start point of the line source
+                QStringList coords = line.section(":", 1).split(",");
+                px1 = coords[0].toDouble();
+                py1 = coords[1].toDouble();
+            }
+            else if (line.startsWith("Point 2:")) {
+                // Extract the coordinates from the line and set the start point of the line source
+                QStringList coords = line.section(":", 1).split(",");
+                px2 = coords[0].toDouble();
+                py2 = coords[1].toDouble();
+            }
+            else if (line.startsWith("Resolution:")) {
+                // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
+                reso = line.section(":", 1).trimmed().toInt();
+            }
+            // Check if the line contains the color information
+            else if (line.startsWith("Color:")) {
+                // Extract the color values from the line and set the color of the actor based on the color name
+                QStringList colorValues = line.section(":", 1).trimmed().split(" ");
+                color = colorValues.at(0).toStdString();
+            }
+            // Check if the line contains the Thickness information
+            else if (line.startsWith("Thickness:")) {
+                // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
+                thickness = line.section(":", 1).trimmed().toInt();
+            }
+        }
+        Draw_Arc(x, y, px1, py1, px2, py2, reso, color, thickness);
+    }
     window->Render();
     file.close();
 }
@@ -819,13 +1343,51 @@ void Change_Shapes(QComboBox* comboBox)
         std::string mode = buttonText.toStdString();
         Draw_circle(x, y, radius, mode, "Red", 1.0);
     }
-    else if (shape_name == "Ellipse")
+    else if (shape_name == "Arc")
     {
-        Draw_Ellipse();
+        bool ok;
+        // Get the center of the circle from the user using a QInputDialog
+        double x = QInputDialog::getDouble(nullptr, "Enter Center X", "Enter the x coordinate of the center of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double y = QInputDialog::getDouble(nullptr, "Enter Center Y", "Enter the y coordinate of the center of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double px1 = QInputDialog::getDouble(nullptr, "Enter Point 1", "Enter the x coordinate of the point 1 of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double py1 = QInputDialog::getDouble(nullptr, "Enter Point 1", "Enter the y coordinate of the point 1 of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double px2 = QInputDialog::getDouble(nullptr, "Enter Point 2", "Enter the x coordinate of the point 2 of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double py2 = QInputDialog::getDouble(nullptr, "Enter Point 2", "Enter the y coordinate of the point 2 of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        int reso = QInputDialog::getDouble(nullptr, "Enter Resolution", "Enter the Resolution of the Arc : ", 3, 3, 100, 1, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Arc(x, y, px1, py1, px2, py2, reso, "Red", 1.0);
     }
-    else if (shape_name == "Polygon")
+    else if (shape_name == "Hexahedron")
     {
-        //Draw_Polygon();
+        // Ask user for filled or non-filled region
+        QMessageBox messageBox;
+        messageBox.setText("Choose Region Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("Filled"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("Non-Filled"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        Draw_Hexahedron("Red", 1.0, mode);
     }
     else if (shape_name == "Line")
     {
@@ -900,13 +1462,43 @@ void Change_Shapes(QComboBox* comboBox)
         std::string mode = buttonText.toStdString();
         Draw_Regular_Polygon(x, y, numSides, apothem, mode, "Red", 1.0);
     }
-    else if (shape_name == "Polyline") {
-        //Draw_Polyline();
+    else if (shape_name == "Cylinder") {
+        bool ok;
+        // Get the center of the Regular Polygon from the user using a QInputDialog
+        double x = QInputDialog::getDouble(nullptr, "Enter Center X", "Enter the x coordinate of the center of the Cylinder:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double y = QInputDialog::getDouble(nullptr, "Enter Center Y", "Enter the y coordinate of the center of the Cylinder:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double Height = QInputDialog::getDouble(nullptr, "Enter Height", "Enter the Height of the Cylinder:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        int resoultion = QInputDialog::getInt(nullptr, "Enter Resolution", "Enter the Resolution of the Cylinder:", 3, 3, 100, 1, &ok);
+        if (!ok) {
+            return;
+        }
+        // Prompt the user for the radius of the Cone
+        double radius = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Cylinder:", 1.0, 0.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        // Ask user for filled or non-filled region
+        QMessageBox messageBox;
+        messageBox.setText("Choose Region Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("Filled"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("Non-Filled"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        Draw_Cylinder(x, y, Height, radius, resoultion, "Red", 1.0, mode);
     }
     // Reset the camera and render the window
     window->Render();
     //renderer->ResetCamera();
-
 }
 namespace {
 
@@ -1127,7 +1719,7 @@ int main(int argc, char* argv[])
     QPushButton* changeshapes = new QPushButton("Change Shape");
     dockLayout->addWidget(changeshapes);
 
-    // Color droplist
+    // Shapes droplist
     QComboBox* shapesdroplist = new QComboBox();
     shapesdroplist->addItem("Line");
     shapesdroplist->addItem("Polyline");
@@ -1137,6 +1729,8 @@ int main(int argc, char* argv[])
     shapesdroplist->addItem("Arc");
     shapesdroplist->addItem("Ellipse");
     shapesdroplist->addItem("Cone");
+    shapesdroplist->addItem("Cylinder");
+    shapesdroplist->addItem("Hexahedron");
     shapesdroplist->setCurrentIndex(0); // Set default value
     dockLayout->addWidget(shapesdroplist);
 
@@ -1163,7 +1757,7 @@ int main(int argc, char* argv[])
     renderer->SetBackground(0.5, 0.502, 0.5647); // Set the background color of the renderer
     window->GetInteractor()->SetPicker(pointPicker);    // connect between qt and vtk
     window->SetInteractor(vtkRenderWidget->interactor());
-    window->GetInteractor()->SetInteractorStyle(style);
+    //window->GetInteractor()->SetInteractorStyle(style);
     style->setlinesource(lineSource);
     style->setlineactor(Lineactor);
     //vtkRenderWidget->update();    //update render
