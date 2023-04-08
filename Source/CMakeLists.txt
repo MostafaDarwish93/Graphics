@@ -1,4 +1,3 @@
-SET(VTK_DIR "O:\VTK\bin")
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 if(POLICY CMP0020)
@@ -8,13 +7,16 @@ endif()
 
 PROJECT(MinimalQtVTKApp)
 
-find_package(VTK COMPONENTS 
+find_package(VTK COMPONENTS
   CommonColor
+  CommonComputationalGeometry
   CommonCore
   CommonDataModel
+  FiltersGeneral # Add the FiltersGeneral component to use the vtkParametricEllipsoid library
   FiltersSources
   GUISupportQt
   InteractionStyle
+  InteractionWidgets
   RenderingContextOpenGL2
   RenderingCore
   RenderingFreeType
@@ -24,6 +26,7 @@ find_package(VTK COMPONENTS
   RenderingQt
 )
 
+
 if(NOT VTK_FOUND)
   message(FATAL_ERROR "MinimalQtVTKApp: Unable to find the VTK build folder.")
 endif()
@@ -31,7 +34,6 @@ endif()
 if(NOT(TARGET VTK::GUISupportQt))
   message(FATAL_ERROR "MinimalQtVTKApp: VTK not built with Qt support.")
 endif()
-
 
 if(NOT DEFINED VTK_QT_VERSION)
   set(VTK_QT_VERSION 5)
@@ -47,7 +49,6 @@ list(SORT qt_components)
 find_package(Qt${VTK_QT_VERSION} QUIET
   REQUIRED COMPONENTS ${qt_components}
 )
-
 
 foreach(_qt_comp IN LISTS qt_components)
   list(APPEND qt_modules "Qt${VTK_QT_VERSION}::${_qt_comp}")
@@ -81,7 +82,6 @@ else()
   target_link_libraries(MinimalQtVTKApp ${qt_modules})
 endif()
 target_link_libraries(MinimalQtVTKApp ${VTK_LIBRARIES})
-
 # vtk_module_autoinit is needed
 vtk_module_autoinit(
   TARGETS MinimalQtVTKApp
