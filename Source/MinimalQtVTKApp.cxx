@@ -25,6 +25,7 @@
 #include <vtkConeSource.h>
 #include <vtkCylinderSource.h>
 #include <vtkHexahedron.h>
+#include <vtkParametricEllipsoid.h>
 
 #include <QApplication> 
 #include <QDockWidget>
@@ -41,6 +42,8 @@
 #include <qmessagebox.h>
 #include <vtkUnstructuredGrid.h>
 #include <vtkArcSource.h>
+#include <vtkParametricEllipsoid.h>
+#include <vtkParametricFunctionSource.h>
 using namespace std;
 
 double picked[3]; // Declares an array of 3 doubles called "picked"
@@ -51,6 +54,7 @@ bool ellip_state = 0;
 bool cone_state = 0;
 bool cylinder_state = 0;
 bool Hexahedron_state = 0;
+bool ellipse_state = 0;
 
 vtkSmartPointer<vtkActor> Lineactor;
 //vtkSmartPointer<vtkActor> CircleActor;
@@ -75,6 +79,12 @@ vtkSmartPointer<vtkPolyDataMapper> Polygon_mapper = vtkSmartPointer<vtkPolyDataM
 vtkSmartPointer<vtkActor> coneActor = vtkSmartPointer<vtkActor>::New();
 vtkSmartPointer<vtkConeSource> coneSource = vtkSmartPointer<vtkConeSource>::New();
 vtkSmartPointer<vtkPolyDataMapper> coneMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+
+// Create global variables for the Ellipse actor and mapper
+vtkSmartPointer<vtkParametricEllipsoid> parametricEllipsoid = vtkSmartPointer<vtkParametricEllipsoid>::New();
+vtkSmartPointer<vtkParametricFunctionSource> ellipsoidSource = vtkSmartPointer<vtkParametricFunctionSource>::New();
+vtkSmartPointer<vtkPolyDataMapper> ellipseMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+vtkSmartPointer<vtkActor> ellipseActor = vtkSmartPointer<vtkActor>::New();
 
 // Create global variables for the Hexahedron actor 
 vtkSmartPointer<vtkActor> Hexahedron_actor = vtkSmartPointer<vtkActor>::New();
@@ -214,10 +224,71 @@ void Draw_Regular_Polygon(double x, double y, int numSides, double apothem, stri
     renderer->AddActor(Polygon_actor);
 }
 
-
-void Draw_Ellipse()
+void Draw_Ellipse(double x, double y, double radiusX, double radiusY, string mode, string color, int thickness)
 {
+    // Set the position of the actor
+    ellipseActor->SetPosition(x, y, 0);
+    // Create a parametric ellipsoid
+    parametricEllipsoid->SetXRadius(radiusX);
+    parametricEllipsoid->SetYRadius(radiusY);
+    parametricEllipsoid->SetZRadius(0);
+
+    // Update the source with information
+    ellipsoidSource->SetParametricFunction(parametricEllipsoid);
+    ellipsoidSource->SetUResolution(50);
+    ellipsoidSource->SetVResolution(50);
+    ellipsoidSource->Update();
+
+    // Update the mapper with the new data
+    ellipseMapper->SetInputConnection(ellipsoidSource->GetOutputPort());
+    ellipseMapper->Update();
+
+    // Update the actor with the new mapper
+    ellipseActor->SetMapper(ellipseMapper);
+
+    // Update the actor with the new mapper and properties based on user's choice
+    if (mode == "Filled") {
+        ellipse_state = 1;
+    }
+    else if (mode == "Non-Filled") {
+        // Set fill color to background color and opacity to 0
+        ellipse_state = 0;
+        vtkSmartPointer<vtkProperty> fillProperty = vtkSmartPointer<vtkProperty>::New();
+        fillProperty->SetColor(renderer->GetBackground());
+        fillProperty->SetOpacity(1.0);
+        ellipseActor->SetProperty(fillProperty);
+
+        // Show only the edges
+        ellipseActor->GetProperty()->EdgeVisibilityOn();
+        ellipseActor->GetProperty()->BackfaceCullingOn();
+    }
+    if (color == "Red") {
+        ellipseActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        ellipseActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        ellipseActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        ellipseActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        ellipseActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        ellipseActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        ellipseActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    ellipseActor->GetProperty()->SetLineWidth(thickness);
+
+    // Add the actor to the renderer
+    renderer->AddActor(ellipseActor);
 }
+
 
 void Draw_Line() {
     
@@ -268,11 +339,18 @@ void Draw_Arc(double x, double y, double px1, double py1, double px2, double py2
     window->Render();
 }
 
-void Draw_Hexahedron(string color, double thickness, string mode)
+void Draw_Hexahedron(string color, double thickness, string mode, double length)
 {
     // Define the geometry of the hexahedron
-    const double vertices[8][3] = { {0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0},
-                                   {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1} };
+    const double halfLength = length / 2.0;
+    const double vertices[8][3] = { {-halfLength, -halfLength, -halfLength},
+                                    { halfLength, -halfLength, -halfLength},
+                                    { halfLength,  halfLength, -halfLength},
+                                    {-halfLength,  halfLength, -halfLength},
+                                    {-halfLength, -halfLength,  halfLength},
+                                    { halfLength, -halfLength,  halfLength},
+                                    { halfLength,  halfLength,  halfLength},
+                                    {-halfLength,  halfLength,  halfLength} };
     const vtkIdType faces[6][4] = { {0, 1, 2, 3}, {0, 4, 5, 1}, {1, 5, 6, 2},
                                    {2, 6, 7, 3}, {3, 7, 4, 0}, {4, 7, 6, 5} };
 
@@ -473,6 +551,7 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         cylinderActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
         Hexahedron_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
         arcActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        ellipseActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
     }
     else if (color_name == "Green")
     {
@@ -483,6 +562,7 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         cylinderActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
         Hexahedron_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
         arcActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        ellipseActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
     }
     else if (color_name == "Blue")
     {
@@ -493,6 +573,7 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         cylinderActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
         Hexahedron_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
         arcActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+        ellipseActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
     }
     else if (color_name == "Yellow")
     {
@@ -503,6 +584,7 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         cylinderActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
         Hexahedron_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
         arcActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+        ellipseActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
     }
     else if (color_name == "Magenta")
     {
@@ -513,6 +595,7 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         cylinderActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
         Hexahedron_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
         arcActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+        ellipseActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
     }
     else if (color_name == "Black")
     {
@@ -523,6 +606,7 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         cylinderActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
         Hexahedron_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
         arcActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        ellipseActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
     }
     else if (color_name == "White")
     {
@@ -533,6 +617,7 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         cylinderActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
         Hexahedron_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
         arcActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        ellipseActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
     }
     window->Render();
 }
@@ -545,6 +630,7 @@ void UpdateLineThickness(int thickness, vtkActor* actor) {
     cylinderActor->GetProperty()->SetLineWidth(thickness);
     Hexahedron_actor->GetProperty()->SetLineWidth(thickness);
     arcActor->GetProperty()->SetLineWidth(thickness);
+    ellipseActor->GetProperty()->SetLineWidth(thickness);
     actor->GetMapper()->Update();
     window->Render();
 }
@@ -979,6 +1065,68 @@ void Save(vtkActor* actor, QComboBox* comboBox) {
             outputFile.close();
         }
     }
+    else if (shape_name == "Ellipse") {
+        // Get the input parameters of the ellipse
+        float centerX = ellipseActor->GetCenter()[0];
+        double centerY = ellipseActor->GetCenter()[1];
+        double radiusX = parametricEllipsoid->GetXRadius();
+        double radiusY = parametricEllipsoid->GetYRadius();
+
+        // Get the color and thickness of the line
+        double* color = ellipseActor->GetProperty()->GetColor();
+        double thickness = ellipseActor->GetProperty()->GetLineWidth();
+        string color_name;
+
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        // Open a file dialog to let the user choose the output file
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            // Write the start and end points, color, and thickness to the output file
+            outputFile << "Ellipse" << std::endl;
+            outputFile << "Center point: " << centerX << ", " << centerY << std::endl;
+            outputFile << "RadiusX: " << radiusX << std::endl;
+            outputFile << "RadiusY: " << radiusY << std::endl;
+            outputFile << "Color: " << color_name << std::endl;
+            outputFile << "Thickness: " << thickness << std::endl;
+            if (ellipse_state == 1) {
+                outputFile << "Ellipse State: " << "Filled" << std::endl;
+            }
+            else {
+                outputFile << "Ellipse State: " << "Non-Filled" << std::endl;
+            }
+            // Close the output file
+            outputFile.close();
+        }
+    }
 }
 
 // Upload Function
@@ -1260,7 +1408,7 @@ void Upload(vtkActor* actor) {
                 state = line.section(":", 1).trimmed().toStdString();
             }
         }
-        Draw_Hexahedron(color, thickness, state);
+        //Draw_Hexahedron(color, thickness, state);
     }
     else if (line.startsWith("Arc")) {
         !in.atEnd();
@@ -1306,6 +1454,50 @@ void Upload(vtkActor* actor) {
         }
         Draw_Arc(x, y, px1, py1, px2, py2, reso, color, thickness);
     }
+    else if (line.startsWith("Ellipse")) {
+        !in.atEnd();
+        double x, y, radiusX, radiusY;
+        string color;
+        int thickness;
+        string state;
+        while (!in.atEnd()) {
+            line = in.readLine();
+            // Check if the line contains the center point coordinates
+            if (line.startsWith("Center point:")) {
+                // Extract the coordinates from the line and set the start point of the line source
+                QStringList coords = line.section(":", 1).split(",");
+                x = coords[0].toDouble();
+                y = coords[1].toDouble();
+            }
+            // Check if the line contains the radius information
+            else if (line.startsWith("RadiusX:")) {
+                // Extract the radius value from the line and set the radius of the ellipse source
+                radiusX = line.section(":", 1).trimmed().toDouble();
+
+            }
+            else if (line.startsWith("RadiusY:")) {
+                radiusY = line.section(":", 1).trimmed().toDouble();
+            }
+            // Check if the line contains the color information
+            else if (line.startsWith("Color:")) {
+                // Extract the color values from the line and set the color of the actor based on the color name
+                QStringList colorValues = line.section(":", 1).trimmed().split(" ");
+                color = colorValues.at(0).toStdString();
+            }
+            // Check if the line contains the Thickness information
+            else if (line.startsWith("Thickness:")) {
+                // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
+                thickness = line.section(":", 1).trimmed().toInt();
+
+            }
+            // Check if the circle is filled
+            else if (line.startsWith("Ellipse State:")) {
+                // Extract the ellipse state value from the line and set the actor state based on the circle state
+                state = line.section(":", 1).trimmed().toStdString();
+            }
+        }
+        Draw_Ellipse(x, y, radiusX, radiusY, state, color, thickness);
+        }
     window->Render();
     file.close();
 }
@@ -1380,6 +1572,12 @@ void Change_Shapes(QComboBox* comboBox)
     else if (shape_name == "Hexahedron")
     {
         // Ask user for filled or non-filled region
+        bool ok;
+        // Get the center of the circle from the user using a QInputDialog
+        double len = QInputDialog::getDouble(nullptr, "Enter the length", "Enter the length of the each side of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
         QMessageBox messageBox;
         messageBox.setText("Choose Region Type");
         QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("Filled"), QMessageBox::YesRole);
@@ -1387,7 +1585,7 @@ void Change_Shapes(QComboBox* comboBox)
         messageBox.exec();
         QString buttonText = messageBox.clickedButton()->text();
         std::string mode = buttonText.toStdString();
-        Draw_Hexahedron("Red", 1.0, mode);
+        Draw_Hexahedron("Red", 1.0, mode, len);
     }
     else if (shape_name == "Line")
     {
@@ -1495,6 +1693,36 @@ void Change_Shapes(QComboBox* comboBox)
         QString buttonText = messageBox.clickedButton()->text();
         std::string mode = buttonText.toStdString();
         Draw_Cylinder(x, y, Height, radius, resoultion, "Red", 1.0, mode);
+    }
+    else if (shape_name == "Ellipse") {
+        bool ok;
+        // Get the center of the circle from the user using a QInputDialog
+        double x = QInputDialog::getDouble(nullptr, "Enter Center X", "Enter the x coordinate of the center of the Ellipse:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double y = QInputDialog::getDouble(nullptr, "Enter Center Y", "Enter the y coordinate of the center of the Ellipse:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        // Get the radius of the circle from the user using a QInputDialog
+        double radiusX = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radiusX of the Ellipse:", 1.0, 0.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double radiusY = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radiusY of the Ellipse:", 1.0, 0.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        // Ask user for filled or non-filled region
+        QMessageBox messageBox;
+        messageBox.setText("Choose Region Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("Filled"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("Non-Filled"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        Draw_Ellipse(x, y, radiusX, radiusY, mode, "Red", 1.0);
     }
     // Reset the camera and render the window
     window->Render();
