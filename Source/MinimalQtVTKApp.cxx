@@ -88,6 +88,7 @@ vtkSmartPointer<vtkActor> ellipseActor = vtkSmartPointer<vtkActor>::New();
 
 // Create global variables for the Hexahedron actor 
 vtkSmartPointer<vtkActor> Hexahedron_actor = vtkSmartPointer<vtkActor>::New();
+vtkSmartPointer<vtkUnstructuredGrid> hexGrid = vtkSmartPointer<vtkUnstructuredGrid>::New();
 
 // Create global variables for the A actor and mapper
 vtkSmartPointer<vtkArcSource> arcSource = vtkSmartPointer<vtkArcSource>::New();
@@ -367,8 +368,8 @@ void Draw_Hexahedron(string color, double thickness, string mode, double length)
         }
         cells->InsertNextCell(hex);
     }
-    vtkSmartPointer<vtkUnstructuredGrid> hexGrid = vtkSmartPointer<vtkUnstructuredGrid>::New();
     hexGrid->SetPoints(points);
+    hexGrid->SetReferenceCount(length);
     hexGrid->SetCells(VTK_HEXAHEDRON, cells);
     vtkSmartPointer<vtkDataSetMapper> mapper = vtkSmartPointer<vtkDataSetMapper>::New();
     mapper->SetInputData(hexGrid);
@@ -948,8 +949,15 @@ void Save(vtkActor* actor, QComboBox* comboBox) {
     }
     else if (shape_name == "Hexahedron") {
         // Define the geometry of the hexahedron
-        const double vertices[8][3] = { {0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0},
-                                   {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1} };
+        double length = hexGrid->GetReferenceCount();
+        double vertices[8][3] = { {-length / 2.0, -length / 2.0, -length / 2.0},
+                              { length / 2.0, -length / 2.0, -length / 2.0},
+                              { length / 2.0,  length / 2.0, -length / 2.0},
+                              {-length / 2.0,  length / 2.0, -length / 2.0},
+                              {-length / 2.0, -length / 2.0,  length / 2.0},
+                              { length / 2.0, -length / 2.0,  length / 2.0},
+                              { length / 2.0,  length / 2.0,  length / 2.0},
+                              {-length / 2.0,  length / 2.0,  length / 2.0} };
         const vtkIdType faces[6][4] = { {0, 1, 2, 3}, {0, 4, 5, 1}, {1, 5, 6, 2},
                                    {2, 6, 7, 3}, {3, 7, 4, 0}, {4, 7, 6, 5} };
 
@@ -994,6 +1002,7 @@ void Save(vtkActor* actor, QComboBox* comboBox) {
 
             // Write the vertices and faces to the output file
             outputFile << "Hexahedron" << std::endl;
+            outputFile << "The length of the sides of Hexahedron is: " << length << std::endl;;
             for (int i = 0; i < 8; ++i) {
                 outputFile << "Vertex " << i << ": " << vertices[i][0] << " " << vertices[i][1] << " " << vertices[i][2] << std::endl;
             }
@@ -1388,6 +1397,7 @@ void Upload(vtkActor* actor) {
         string color;
         int thickness;
         string state;
+        double length;
         while (!in.atEnd()) {
             line = in.readLine();
             // Check if the line contains the color information
@@ -1395,6 +1405,10 @@ void Upload(vtkActor* actor) {
                 // Extract the color values from the line and set the color of the actor based on the color name
                 QStringList colorValues = line.section(":", 1).trimmed().split(" ");
                 color = colorValues.at(0).toStdString();
+            }
+            else if (line.startsWith("The length of the sides of Hexahedron is:")) {
+                length = line.section(":", 1).trimmed().toDouble();
+
             }
             // Check if the line contains the Thickness information
             else if (line.startsWith("Thickness:")) {
@@ -1408,7 +1422,7 @@ void Upload(vtkActor* actor) {
                 state = line.section(":", 1).trimmed().toStdString();
             }
         }
-        //Draw_Hexahedron(color, thickness, state);
+        Draw_Hexahedron(color, thickness, state, length);
     }
     else if (line.startsWith("Arc")) {
         !in.atEnd();
