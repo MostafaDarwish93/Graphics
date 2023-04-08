@@ -116,7 +116,7 @@ vtkSmartPointer<vtkTextWidget> textWidget = vtkSmartPointer<vtkTextWidget>::New(
 void Draw_circle(double x, double y, double radius, string mode, string color, int thickness)
 {
     // Update the center and radius of the circle source
-    circleSource->GeneratePolygonOff();
+    //circleSource->GeneratePolygonOff();
     circleSource->SetNumberOfSides(50);
     circleSource->SetCenter(x, y, 0);
     circleSource->SetRadius(radius);
@@ -135,7 +135,7 @@ void Draw_circle(double x, double y, double radius, string mode, string color, i
         // Set fill color to background color and opacity to 0
         vtkSmartPointer<vtkProperty> fillProperty = vtkSmartPointer<vtkProperty>::New();
         fillProperty->SetColor(renderer->GetBackground());
-        fillProperty->SetOpacity(1.0);
+        fillProperty->SetOpacity(1);
         Circle_actor->SetProperty(fillProperty);
 
         // Show only the edges
