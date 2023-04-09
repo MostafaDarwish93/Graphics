@@ -26,6 +26,7 @@
 #include <vtkCylinderSource.h>
 #include <vtkHexahedron.h>
 #include <vtkParametricEllipsoid.h>
+#include <vtkTriangleStrip.h>
 
 #include <QApplication> 
 #include <QDockWidget>
@@ -44,6 +45,12 @@
 #include <vtkArcSource.h>
 #include <vtkParametricEllipsoid.h>
 #include <vtkParametricFunctionSource.h>
+#include <vtkParametricSuperEllipsoid.h>
+#include <vtkTextureMapToSphere.h>
+#include <vtkJPEGReader.h>
+#include <vtkPolyDataNormals.h>
+#include <vtkArrowSource.h>
+#include <vtkParametricSpline.h>
 using namespace std;
 
 double picked[3]; // Declares an array of 3 doubles called "picked"
@@ -55,6 +62,7 @@ bool cone_state = 0;
 bool cylinder_state = 0;
 bool Hexahedron_state = 0;
 bool ellipse_state = 0;
+bool square_state = 0;
 
 vtkSmartPointer<vtkActor> Lineactor;
 //vtkSmartPointer<vtkActor> CircleActor;
@@ -100,6 +108,24 @@ vtkSmartPointer<vtkCylinderSource> cylinderSource = vtkSmartPointer<vtkCylinderS
 vtkSmartPointer<vtkPolyDataMapper> cylinderMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
 vtkSmartPointer<vtkActor> cylinderActor = vtkSmartPointer<vtkActor>::New();
 vtkSmartPointer<vtkProperty> cylinderProperty = vtkSmartPointer<vtkProperty>::New();
+
+// Create global variables for the Cylinder actor and mapper
+vtkSmartPointer<vtkActor> Trinangle_strip_actor = vtkSmartPointer<vtkActor>::New();
+vtkNew<vtkPoints> tri_points;
+vtkNew<vtkTriangleStrip> triangleStrip;
+
+// Create global variables for the Ball actor and mapper
+vtkSmartPointer<vtkActor> ball_actor = vtkSmartPointer<vtkActor>::New();
+vtkSmartPointer<vtkSphereSource> ball_src = vtkSmartPointer<vtkSphereSource>::New();
+
+// Text requirments
+vtkSmartPointer<vtkTextActor> textActor = vtkSmartPointer<vtkTextActor>::New();
+vtkSmartPointer<vtkTextProperty> textProp = textActor->GetTextProperty();
+
+//Square Requirments
+vtkSmartPointer<vtkRegularPolygonSource> squareSource = vtkSmartPointer<vtkRegularPolygonSource>::New();
+vtkSmartPointer<vtkActor> squareActor = vtkSmartPointer<vtkActor>::New();
+vtkSmartPointer<vtkPolyDataMapper> squareMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
 
 // Create a new instance of vtkRenderWindowInteractor using vtkNew macro
 vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
@@ -168,7 +194,6 @@ void Draw_circle(double x, double y, double radius, string mode, string color, i
     // Add the actor to the renderer
     renderer->AddActor(Circle_actor);
 }
-
 
 void Draw_Regular_Polygon(double x, double y, int numSides, double apothem, string mode, string color, int thickness) {
     // Create a vtkRegularPolygonSource with the given number of sides and apothem
@@ -289,7 +314,6 @@ void Draw_Ellipse(double x, double y, double radiusX, double radiusY, string mod
     // Add the actor to the renderer
     renderer->AddActor(ellipseActor);
 }
-
 
 void Draw_Line() {
     
@@ -418,7 +442,47 @@ void Draw_Hexahedron(string color, double thickness, string mode, double length)
     renderer->AddActor(Hexahedron_actor);
 }
 
+void Draw_Text(QString text, int fontSize, string color)
+{
+    // Set the text properties
+    textProp->SetFontFamilyToArial();
+    if (color == "Red") {
+        textProp->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        textProp->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        textProp->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        textProp->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        textProp->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        textProp->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        textProp->SetColor(1.0, 1.0, 1.0);
+    }
+    textProp->SetFontSize(fontSize);
 
+    // Set the text
+    textActor->SetInput(text.toStdString().c_str());
+
+    // Set the position of the text in the middle of the renderer window
+    double windowCenter[2];
+    renderer->GetRenderWindow()->GetSize();
+    //renderer->SetViewport(0, 0, 1, 1);
+    windowCenter[0] = renderer->GetCenter()[0];
+    windowCenter[1] = renderer->GetCenter()[1];
+    textActor->SetPosition(windowCenter[0] - 50, windowCenter[1]);
+
+    // Add the text actor to the renderer
+    renderer->AddActor(textActor);
+}
 
 void Draw_Cone(double x, double y, double height, int res, double rad, string color, int thickness, string mode) {
     coneSource->SetHeight(height);
@@ -474,6 +538,91 @@ void Draw_Cone(double x, double y, double height, int res, double rad, string co
     renderer->AddActor(coneActor);
 }
 
+void Draw_Football(int reso, double radius, double x, double y, string color, int thickness) {
+    // Define football parameters
+    double a = 1.0; // radius in x direction
+    double b = 1.0; // radius in y direction
+    double c = 0.75; // radius in z direction
+    int resolution = reso; // number of points in each direction
+
+    // Create a new vtkPoints object to hold the football vertices
+    vtkNew<vtkPoints> points;
+
+    // Generate the football vertices using a combination of spherical harmonics and trigonometric functions
+    for (int i = 0; i <= resolution; i++) {
+        double theta = i * M_PI / resolution;
+        double sin_theta = sin(theta);
+        double cos_theta = cos(theta);
+
+        for (int j = 0; j <= resolution; j++) {
+            double phi = j * 2 * M_PI / resolution;
+            double sin_phi = sin(phi);
+            double cos_phi = cos(phi);
+
+            double x = a * sin_theta * cos_phi;
+            double y = b * sin_theta * sin_phi;
+            double z = c * cos_theta;
+
+            double r = sqrt(x * x + y * y + z * z);
+
+            // Scale the points to fit within the unit sphere
+            x /= r;
+            y /= r;
+            z /= r;
+
+            points->InsertNextPoint(x, y, z);
+        }
+    }
+
+    // Create a new vtkPolyData object to hold the football geometry
+    vtkNew<vtkPolyData> football;
+
+    // Set the points for the vtkPolyData object
+    football->SetPoints(points);
+
+    // Create a new vtkSphereSource object to generate normals for the football surface
+    ball_src->SetCenter(x, y, 0);
+    ball_src->SetRadius(radius);
+    ball_src->SetPhiResolution(resolution);
+    ball_src->SetThetaResolution(resolution);
+
+    // Compute the normals for the football surface
+    vtkNew<vtkPolyDataNormals> normals;
+    normals->SetInputData(football);
+    normals->SetInputConnection(ball_src->GetOutputPort());
+
+    // Create a new vtkPolyDataMapper object to map the football geometry to an actor
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputConnection(normals->GetOutputPort());
+
+    // Create a new vtkActor object to represent the football
+    ball_actor->SetMapper(mapper);
+    if (color == "Red") {
+        ball_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        ball_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        ball_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        ball_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        ball_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        ball_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        ball_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    ball_actor->GetProperty()->SetLineWidth(thickness);
+
+    // Add the actor to the renderer
+    renderer->AddActor(ball_actor);
+}
 
 void Draw_Cylinder(double x, double y, double height, double radius, int reso, string color, int thickness, string mode)
 {
@@ -536,7 +685,109 @@ void Draw_Cylinder(double x, double y, double height, double radius, int reso, s
     renderer->AddActor(cylinderActor);
 }
 
+void Draw_TriangleStrip(string color, int thickness, double sideLength)
+{
+    tri_points->InsertNextPoint(0, 0, 0);
+    tri_points->InsertNextPoint(0, sideLength, 0);
+    tri_points->InsertNextPoint(sideLength, 0, 0);
+    double hypotenuse = sqrt(2 * pow(sideLength, 2)); // Calculate length of hypotenuse
+    tri_points->InsertNextPoint(sideLength + hypotenuse / 2, sideLength, 0); // Vertex opposite the hypotenuse
 
+    triangleStrip->GetPointIds()->SetNumberOfIds(4);
+    triangleStrip->GetPointIds()->SetId(0, 0);
+    triangleStrip->GetPointIds()->SetId(1, 1);
+    triangleStrip->GetPointIds()->SetId(2, 2);
+    triangleStrip->GetPointIds()->SetId(3, 3);
+    triangleStrip->SetReferenceCount(sideLength);
+
+    vtkNew<vtkCellArray> cells;
+    cells->InsertNextCell(triangleStrip);
+
+    vtkNew<vtkPolyData> polydata;
+    polydata->SetPoints(tri_points);
+    polydata->SetStrips(cells);
+
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputData(polydata);
+
+    if (color == "Red") {
+        Trinangle_strip_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        Trinangle_strip_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        Trinangle_strip_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        Trinangle_strip_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        Trinangle_strip_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        Trinangle_strip_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        Trinangle_strip_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    Trinangle_strip_actor->GetProperty()->SetLineWidth(thickness);
+
+    Trinangle_strip_actor->SetMapper(mapper);
+    renderer->AddActor(Trinangle_strip_actor);
+}
+
+void Draw_Square(double x, double y, double radius, string mode, string color, int thickness) {
+    // Create a regular polygon source with 4 sides (a square)
+    squareSource->SetNumberOfSides(4);
+    squareSource->SetRadius(radius); // adjust the size of the square as needed
+    squareSource->SetCenter(x, y, 0); // set the center of the square to the origin
+
+    // Create a mapper and actor for the square
+    squareMapper->SetInputConnection(squareSource->GetOutputPort());
+
+    squareActor->SetMapper(squareMapper);
+    if (mode == "Filled") {
+        square_state = 1;
+    }
+    else if (mode == "Non-Filled") {
+        // Set fill color to background color and opacity to 0
+        vtkSmartPointer<vtkProperty> fillProperty = vtkSmartPointer<vtkProperty>::New();
+        fillProperty->SetColor(renderer->GetBackground());
+        fillProperty->SetOpacity(1.0);
+        squareActor->SetProperty(fillProperty);
+
+        // Show only the edges
+        squareActor->GetProperty()->EdgeVisibilityOn();
+        squareActor->GetProperty()->BackfaceCullingOn();
+        square_state = 0;
+    }
+    if (color == "Red") {
+        squareActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        squareActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        squareActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        squareActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        squareActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        squareActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        squareActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    squareActor->GetProperty()->SetLineWidth(thickness);
+
+    // Add the square actor to the renderer
+    renderer->AddActor(squareActor);
+}
 
     // Define a function to change the color of the line
 void ChangeColor(QComboBox* comboBox, vtkActor* actor)
@@ -553,6 +804,10 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Hexahedron_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
         arcActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
         ellipseActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        Trinangle_strip_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        ball_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        textProp->SetColor(1.0, 0.0, 0.0);
+        squareActor->GetProperty()->SetColor(1.0, 0.0, 0.0);
     }
     else if (color_name == "Green")
     {
@@ -564,6 +819,10 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Hexahedron_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
         arcActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
         ellipseActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        Trinangle_strip_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        ball_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+        textProp->SetColor(0.0, 1.0, 0.0);
+        squareActor->GetProperty()->SetColor(0.0, 1.0, 0.0);
     }
     else if (color_name == "Blue")
     {
@@ -575,6 +834,10 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Hexahedron_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
         arcActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
         ellipseActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+        Trinangle_strip_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+        ball_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+        textProp->SetColor(0.0, 0.0, 1.0);
+        squareActor->GetProperty()->SetColor(0.0, 0.0, 1.0);
     }
     else if (color_name == "Yellow")
     {
@@ -586,6 +849,10 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Hexahedron_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
         arcActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
         ellipseActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+        Trinangle_strip_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+        ball_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+        textProp->SetColor(1.0, 1.0, 0.0);
+        squareActor->GetProperty()->SetColor(1.0, 1.0, 0.0);
     }
     else if (color_name == "Magenta")
     {
@@ -597,6 +864,10 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Hexahedron_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
         arcActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
         ellipseActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+        Trinangle_strip_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+        ball_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+        textProp->SetColor(1.0, 0.0, 1.0);
+        squareActor->GetProperty()->SetColor(1.0, 0.0, 1.0);
     }
     else if (color_name == "Black")
     {
@@ -608,6 +879,10 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Hexahedron_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
         arcActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
         ellipseActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        Trinangle_strip_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        ball_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+        textProp->SetColor(0.0, 0.0, 0.0);
+        squareActor->GetProperty()->SetColor(0.0, 0.0, 0.0);
     }
     else if (color_name == "White")
     {
@@ -619,6 +894,10 @@ void ChangeColor(QComboBox* comboBox, vtkActor* actor)
         Hexahedron_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
         arcActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
         ellipseActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        Trinangle_strip_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        ball_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        textProp->SetColor(1.0, 1.0, 1.0);
+        squareActor->GetProperty()->SetColor(1.0, 1.0, 1.0);
     }
     window->Render();
 }
@@ -632,13 +911,15 @@ void UpdateLineThickness(int thickness, vtkActor* actor) {
     Hexahedron_actor->GetProperty()->SetLineWidth(thickness);
     arcActor->GetProperty()->SetLineWidth(thickness);
     ellipseActor->GetProperty()->SetLineWidth(thickness);
+    Trinangle_strip_actor->GetProperty()->SetLineWidth(thickness);
+    ball_actor->GetProperty()->SetLineWidth(thickness);
+    textProp->SetFontSize(thickness);
+    squareActor->GetProperty()->SetLineWidth(thickness);
     actor->GetMapper()->Update();
     window->Render();
 }
 
 // Save Function
-
-
 void Save(vtkActor* actor, QComboBox* comboBox) {
     // Get the start and end points of the line
     QString shape_name = comboBox->currentText();
@@ -1136,6 +1417,223 @@ void Save(vtkActor* actor, QComboBox* comboBox) {
             outputFile.close();
         }
     }
+    else if (shape_name == "Ball"){
+        // Get the start and end points of the line
+        double centerX = ball_src->GetCenter()[0];
+        double centerY = ball_src->GetCenter()[1];
+        double radius = ball_src->GetRadius();
+        int reso = ball_src->GetPhiResolution();
+
+        // Get the color and thickness of the line
+        double* color = ball_actor->GetProperty()->GetColor();
+        double thickness = ball_actor->GetProperty()->GetLineWidth();
+        string color_name;
+
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        // Open a file dialog to let the user choose the output file
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            // Write the start and end points, color, and thickness to the output file
+            outputFile << "Ball" << std::endl;
+            outputFile << "Center point: " << centerX << ", " << centerY << std::endl;
+            outputFile << "Radius: " << radius << std::endl;
+            outputFile << "Resolution: " << reso << std::endl;
+            outputFile << "Color: " << color_name << std::endl;
+            outputFile << "Thickness: " << thickness << std::endl;
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    else if (shape_name == "Text") {
+        // Get the start and end points of the line
+        QString text = textActor->GetInput();
+
+        // Get the color and Font Size of the Text
+        double* color = textProp->GetColor();
+        int font_size = textProp->GetFontSize();
+        string color_name;
+
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        // Open a file dialog to let the user choose the output file
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            // Write the start and end points, color, and thickness to the output file
+            outputFile << "Text" << std::endl;
+            outputFile << "Text Input: " << text.toStdString() << std::endl;
+            outputFile << "Font Size: " << font_size << std::endl;
+            outputFile << "Color: " << color_name << std::endl;
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    else if (shape_name == "Triangle Strip") {
+        double length = triangleStrip->GetReferenceCount();
+
+        // Get the color and thickness of the line
+        double* color = Trinangle_strip_actor->GetProperty()->GetColor();
+        double thickness = Trinangle_strip_actor->GetProperty()->GetLineWidth();
+        string color_name;
+
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        // Open a file dialog to let the user choose the output file
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            // Write the start and end points, color, and thickness to the output file
+            outputFile << "Triangle Strip" << std::endl;
+            outputFile << "Side length: " << length << std::endl;
+            outputFile << "Color: " << color_name << std::endl;
+            outputFile << "Thickness: " << thickness << std::endl;
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    else if (shape_name == "Square") {
+        // Get the start and end points of the Square
+        double centerX = squareSource->GetCenter()[0];
+        double centerY = squareSource->GetCenter()[1];
+        double radius = squareSource->GetRadius();
+
+        // Get the color and thickness of the Square
+        double* color = squareActor->GetProperty()->GetColor();
+        double thickness = squareActor->GetProperty()->GetLineWidth();
+        string color_name;
+
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        // Open a file dialog to let the user choose the output file
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            // Write the start and end points, color, and thickness to the output file
+            outputFile << "Square" << std::endl;
+            outputFile << "Center point: " << centerX << ", " << centerY << std::endl;
+            outputFile << "Radius: " << radius << std::endl;
+            outputFile << "Color: " << color_name << std::endl;
+            outputFile << "Thickness: " << thickness << std::endl;
+            if (square_state == 1) {
+                outputFile << "Square State: " << "Filled" << std::endl;
+            }
+            else {
+                outputFile << "Square State: " << "Non-Filled" << std::endl;
+            }
+            // Close the output file
+            outputFile.close();
+        }
+    }
 }
 
 // Upload Function
@@ -1146,6 +1644,7 @@ void Upload(vtkActor* actor) {
     if (fileName.isEmpty()) {
         return;
     }
+    
     // Open the selected file in read-only mode and text mode
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -1512,9 +2011,136 @@ void Upload(vtkActor* actor) {
         }
         Draw_Ellipse(x, y, radiusX, radiusY, state, color, thickness);
         }
+    else if (line.startsWith("Ball")) {
+        !in.atEnd();
+        double x, y, radius;
+        string color;
+        int thickness, reso;
+        while (!in.atEnd()) {
+            line = in.readLine();
+            // Check if the line contains the center point coordinates
+            if (line.startsWith("Center point:")) {
+                // Extract the coordinates from the line and set the start point of the line source
+                QStringList coords = line.section(":", 1).split(",");
+                x = coords[0].toDouble();
+                y = coords[1].toDouble();
+            }
+            // Check if the line contains the radius information
+            else if (line.startsWith("Radius:")) {
+                // Extract the radius value from the line and set the radius of the circle source
+                radius = line.section(":", 1).trimmed().toDouble();
+            }
+            // Check if the line contains the color information
+            else if (line.startsWith("Color:")) {
+                // Extract the color values from the line and set the color of the actor based on the color name
+                QStringList colorValues = line.section(":", 1).trimmed().split(" ");
+                color = colorValues.at(0).toStdString();
+            }
+            // Check if the line contains the Thickness information
+            else if (line.startsWith("Thickness:")) {
+                // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
+                thickness = line.section(":", 1).trimmed().toInt();
+            }
+            // Check if the circle is filled
+            else if (line.startsWith("Resolution:")) {
+                // Extract the circle state value from the line and set the actor state based on the circle state
+                reso = line.section(":", 1).trimmed().toInt();
+            }
+        }
+        Draw_Football(reso, radius, x, y, color, thickness);
+    }
+    else if (line.startsWith("Text")) {
+        !in.atEnd();
+        QString text_input;
+        int font_size = 0;
+        string color = "";
+        while (!in.atEnd()) {
+            line = in.readLine();
+            // Check if the Text has a text
+            if (line.startsWith("Text Input:")) {
+                QStringList text = line.section(":", 1).trimmed().split(" ");
+                text_input = QString::fromStdString(text.at(0).toStdString());
+            }
+            // Check if the line contains the color
+            else if (line.startsWith("Color:")) {
+                QStringList colorValues = line.section(":", 1).trimmed().split(" ");
+                color = colorValues.at(0).toStdString();
+            }
+            // Check if the line contains the font size
+            else if (line.startsWith("Font Size:")) {
+                font_size = line.section(":", 1).trimmed().toInt();
+            }
+        }
+        Draw_Text(text_input, font_size, color);
+    }
+    else if (line.startsWith("Triangle Strip")) {
+        !in.atEnd();
+        double length;
+        string color;
+        int thickness;
+        while (!in.atEnd()) {
+            line = in.readLine();
+            // Check if the line contains the center point coordinates
+            if (line.startsWith("Side length:")) {
+                length = line.section(":", 1).trimmed().toDouble();
+            }
+            // Check if the line contains the color information
+            else if (line.startsWith("Color:")) {
+                // Extract the color values from the line and set the color of the actor based on the color name
+                QStringList colorValues = line.section(":", 1).trimmed().split(" ");
+                color = colorValues.at(0).toStdString();
+            }
+            // Check if the line contains the Thickness information
+            else if (line.startsWith("Thickness:")) {
+                // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
+                thickness = line.section(":", 1).trimmed().toInt();
+            }
+        }
+        Draw_TriangleStrip(color , thickness, length);
+    }
+    else if (line.startsWith("Square")) {
+        !in.atEnd();
+        double x, y, radius;
+        string color;
+        int thickness;
+        string state;
+        while (!in.atEnd()) {
+            line = in.readLine();
+            // Check if the line contains the center point coordinates
+            if (line.startsWith("Center point:")) {
+                // Extract the coordinates from the line and set the start point of the line source
+                QStringList coords = line.section(":", 1).split(",");
+                x = coords[0].toDouble();
+                y = coords[1].toDouble();
+            }
+            // Check if the line contains the radius information
+            else if (line.startsWith("Radius:")) {
+                // Extract the radius value from the line and set the radius of the circle source
+                radius = line.section(":", 1).trimmed().toDouble();
+            }
+            // Check if the line contains the color information
+            else if (line.startsWith("Color:")) {
+                // Extract the color values from the line and set the color of the actor based on the color name
+                QStringList colorValues = line.section(":", 1).trimmed().split(" ");
+                color = colorValues.at(0).toStdString();
+            }
+            // Check if the line contains the Thickness information
+            else if (line.startsWith("Thickness:")) {
+                // Extract the Thickness integer for the line and set the Thickness of the actor based on the Thickness
+                thickness = line.section(":", 1).trimmed().toInt();
+            }
+            // Check if the circle is filled
+            else if (line.startsWith("Square State:")) {
+                // Extract the circle state value from the line and set the actor state based on the circle state
+                state = line.section(":", 1).trimmed().toStdString();
+            }
+        }
+        Draw_Square(x, y, radius, state, color, thickness);
+    }
     window->Render();
     file.close();
 }
+
 void Change_Shapes(QComboBox* comboBox)
 {
     // Remove any existing actors from the renderer
@@ -1548,6 +2174,27 @@ void Change_Shapes(QComboBox* comboBox)
         QString buttonText = messageBox.clickedButton()->text();
         std::string mode = buttonText.toStdString();
         Draw_circle(x, y, radius, mode, "Red", 1.0);
+    }
+    else if (shape_name == "Ball") {
+        bool ok;
+        // Get the center of the circle from the user using a QInputDialog
+        double x = QInputDialog::getDouble(nullptr, "Enter Center X", "Enter the x coordinate of the center of the Ball:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double y = QInputDialog::getDouble(nullptr, "Enter Center Y", "Enter the y coordinate of the center of the Ball:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double radius = QInputDialog::getDouble(nullptr, "Enter the radius", "Enter the radius of the Ball:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        int reso = QInputDialog::getDouble(nullptr, "Enter Resolution", "Enter the Resolution of the Ball : ", 3, 3, 100, 1, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Football(reso, radius, x, y, "White", 1.0);
     }
     else if (shape_name == "Arc")
     {
@@ -1585,7 +2232,6 @@ void Change_Shapes(QComboBox* comboBox)
     }
     else if (shape_name == "Hexahedron")
     {
-        // Ask user for filled or non-filled region
         bool ok;
         // Get the center of the circle from the user using a QInputDialog
         double len = QInputDialog::getDouble(nullptr, "Enter the length", "Enter the length of the each side of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
@@ -1737,6 +2383,49 @@ void Change_Shapes(QComboBox* comboBox)
         QString buttonText = messageBox.clickedButton()->text();
         std::string mode = buttonText.toStdString();
         Draw_Ellipse(x, y, radiusX, radiusY, mode, "Red", 1.0);
+    }
+    else if (shape_name == "Triangle Strip") {
+        bool ok;
+        // Get the center of the circle from the user using a QInputDialog
+        double len = QInputDialog::getDouble(nullptr, "Enter the length", "Enter the length of the each side of the Triangle Strip:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_TriangleStrip("Red", 1.0, len);
+    }
+    else if (shape_name == "Text") {
+        // Prompt user for text and font size
+        QString text = QInputDialog::getText(nullptr, "Text Input", "Enter text:");
+        bool ok;
+        int fontSize = QInputDialog::getInt(nullptr, "Font Size Input", "Enter font size:", 24, 1, 100, 1, &ok);
+        if (!ok) return; // User cancelled input dialog
+        Draw_Text(text, fontSize, "Red");
+    }
+    else if (shape_name == "Square") {
+        bool ok;
+        // Get the center of the circle from the user using a QInputDialog
+        double x = QInputDialog::getDouble(nullptr, "Enter Center X", "Enter the x coordinate of the center of the Square:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        double y = QInputDialog::getDouble(nullptr, "Enter Center Y", "Enter the y coordinate of the center of the Square:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        // Get the radius of the circle from the user using a QInputDialog
+        double radius = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Square:", 1.0, 0.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        // Ask user for filled or non-filled region
+        QMessageBox messageBox;
+        messageBox.setText("Choose Region Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("Filled"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("Non-Filled"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        Draw_Square(x, y, radius, mode, "White", 1.0);
     }
     // Reset the camera and render the window
     window->Render();
@@ -1973,8 +2662,16 @@ int main(int argc, char* argv[])
     shapesdroplist->addItem("Cone");
     shapesdroplist->addItem("Cylinder");
     shapesdroplist->addItem("Hexahedron");
+    shapesdroplist->addItem("Triangle Strip");
+    shapesdroplist->addItem("Ball");
+    shapesdroplist->addItem("Square");
+    shapesdroplist->addItem("Text");
     shapesdroplist->setCurrentIndex(0); // Set default value
     dockLayout->addWidget(shapesdroplist);
+
+    //// Font text box
+    //QLineEdit* fontLineEdit = new QLineEdit();
+    //dockLayout->addWidget(fontLineEdit);
 
     //Lineactor = vtkSmartPointer<vtkActor>::New(); // Fix the typo here
     vtkSmartPointer<vtkActor> Lineactor = vtkSmartPointer<vtkActor>::New();
@@ -2023,6 +2720,7 @@ int main(int argc, char* argv[])
         int thickness = thicknessSlider->value();
         UpdateLineThickness(thickness, Lineactor);
         });
+
     //double* mouse = style->GetMousePos();
     // Connect Change Shape 
     QObject::connect(changeshapes, &QPushButton::clicked, [=]() {
