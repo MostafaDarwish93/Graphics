@@ -1,420 +1,555 @@
-#include <vtkActor.h> // Includes the header file for vtkActor class
-#include <vtkInteractorStyleTrackballCamera.h> // Includes the header file for vtkInteractorStyleTrackballCamera class
-#include <vtkNamedColors.h> // Includes the header file for vtkNamedColors class
-#include <vtkNew.h> // Includes the header file for vtkNew macro
-#include <vtkObjectFactory.h> // Includes the header file for vtkObjectFactory class
-#include <vtkPointPicker.h> // Includes the header file for vtkPointPicker class
-#include <vtkPolyDataMapper.h> // Includes the header file for vtkPolyDataMapper class
-#include <vtkProperty.h> // Includes the header file for vtkProperty class
-#include <vtkRenderWindow.h> // Includes the header file for vtkRenderWindow class
-#include <vtkRenderWindowInteractor.h> // Includes the header file for vtkRenderWindowInteractor class
-#include <vtkRenderer.h> // Includes the header file for vtkRenderer class
-#include <vtkRendererCollection.h> // Includes the header file for vtkRendererCollection class
-#include <vtkSphereSource.h> // Includes the header file for vtkSphereSource class
-#include <vtkLineSource.h> // Includes the header file for vtkLineSource class
-#include <vtkSmartPointer.h> // Includes the header file for vtkSmartPointer class
-#include <vtkTextRepresentation.h> // Includes the header file for vtkTextRepresentation class
-#include <vtkSmartPointer.h> // Includes the header file for vtkSmartPointer class (repeated)
-#include <vtkTextWidget.h> // Includes the header file for vtkTextWidget class
-#include <vtkTextActor.h> // Includes the header file for vtkTextActor class
-#include <vtkTextProperty.h> // Includes the header file for vtkTextProperty class
-#include <vtkGenericOpenGLRenderWindow.h>
 #include <QVTKOpenGLNativeWidget.h>
+#include <vtkActor.h>
 #include <vtkDataSetMapper.h>
+#include <vtkDoubleArray.h>
+#include <vtkGenericOpenGLRenderWindow.h>
+#include <vtkPointData.h>
+#include <vtkProperty.h>
+#include <vtkRenderer.h>
+#include <vtkSphereSource.h>
+#include <vtkLineSource.h>
 
+#include <QApplication>
+#include <QDockWidget>
+#include <QGridLayout>
+#include <QLabel>
+#include <QMainWindow>
+#include <QPointer>
+#include <QPushButton>
+#include <QVBoxLayout>
 
-
-#include <QApplication> // Includes the header file for QApplication class
-#include <QDockWidget> // Includes the header file for QDockWidget class
-#include <QGridLayout> // Includes the header file for QGridLayout class
-#include <QLabel> // Includes the header file for QLabel class
-#include <QMainWindow> // Includes the header file for QMainWindow class
-#include <QPointer> // Includes the header file for QPointer class
-#include <QPushButton> // Includes the header file for QPushButton class
-#include <QVBoxLayout> // Includes the header file for QVBoxLayout class
-#include <QFileDialog> 
+#include <cmath>
+#include <cstdlib>
+#include <random>
 #include <qcombobox.h>
+#include <vtkLineSource.h>
+#include <QFileDialog> 
+#include <QInputDialog>
+#include <qmessagebox.h>
+#include <vtkRegularPolygonSource.h>
+#include <vtkPolyDataMapper.h>
+using namespace std;
 
+vtkNew<vtkRenderer> renderer;
 
-
-
-double picked[3]; // Declares an array of 3 doubles called "picked"
-
-
-vtkSmartPointer<vtkActor> Lineactor;
-
-vtkNew<vtkGenericOpenGLRenderWindow> window;
-
-
-// Create a new instance of vtkLineSource using smart pointers
+/// Actor, Source, Mapper
+vtkSmartPointer<vtkActor> actor = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper = vtkDataSetMapper::New();
 vtkSmartPointer<vtkLineSource> lineSource = vtkSmartPointer<vtkLineSource>::New();
 
-// Create a new instance of vtkRenderWindowInteractor using vtkNew macro
-vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
-
-// Create a new instance of vtkRenderer using smart pointers
-vtkSmartPointer<vtkRenderer> renderer = vtkSmartPointer<vtkRenderer>::New();
-
-// Create a new instance of vtkTextWidget using smart pointers
-vtkSmartPointer<vtkTextWidget> textWidget = vtkSmartPointer<vtkTextWidget>::New();
-
-// Create a new instance of vtkRenderWindow using smart pointers
-//vtkSmartPointer<vtkRenderWindow> renderWindow = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
-
-// Define interaction style
-    // 
-    // Define a function to change the color of the line
-void ChangeColor(QComboBox* comboBox, vtkActor* actor, vtkLineSource* line)
-{
-    QString color_name = comboBox->currentText();
-
-    if (color_name == "Red")
-    {
-        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
-
-    }
-    else if (color_name == "Green")
-    {
-        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
-    }
-    else if (color_name == "Blue")
-    {
-        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
-    }
-    else if (color_name == "Yellow")
-    {
-        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
-    }
-    else if (color_name == "Magenta")
-    {
-        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
-    }
-    window->Render();
-}
-
-void UpdateLineThickness(int thickness, vtkActor* actor) {
-    actor->GetProperty()->SetLineWidth(thickness);
-    actor->GetMapper()->Update();
-    window->Render();
-}
 
 
-// Save Function
-void Save(const char* filename) {
-    // Get the start and end points of the line
-    double* startPoint = lineSource->GetPoint1();
-    double* endPoint = lineSource->GetPoint2();
-
-    // Open the output file for writing
-    std::ofstream outputFile(filename);
-
-    // Write the start and end points to the output file
-    outputFile << "Start point: " << startPoint[0] << ", " << startPoint[1] << std::endl;
-    outputFile << "End point: " << endPoint[0] << ", " << endPoint[1] << std::endl;
-
-    // Close the output file
-    outputFile.close();
-}
-
-// Upload Function
-void Upload() {
-    QString fileName = QFileDialog::getOpenFileName(nullptr, "Load Line", "", "Text Files (*.txt)");
-    if (fileName.isEmpty()) {
-        return;
-    }
-
-    QFile file(fileName);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        std::cerr << "Error: Failed to open file for reading." << std::endl;
-        return;
-    }
-
-    QTextStream in(&file);
-    double x1, y1, z1, x2, y2, z2;
-    in >> x1 >> y1 >> z1;
-    in >> x2 >> y2 >> z2;
-
-    //vtkSmartPointer<vtkLineSource> lineSource = vtkSmartPointer<vtkLineSource>::New();
-    // Set the first and second endpoints of the line using the coordinates read from the file
-    lineSource->SetPoint1(x1, y1, 0);
-    lineSource->SetPoint2(x2, y2, 0);
-    //window->Render();
-
-    file.close();
-}
 namespace {
+/**
+ * Deform the sphere source using a random amplitude and modes and render it in
+ * the window
+ *
+ * @param sphere the original sphere source
+ * @param mapper the mapper for the scene
+ * @param window the window to render to
+ * @param randEng the random number generator engine
+ */
+void Randomize(vtkSphereSource* sphere, vtkMapper* mapper,
+               vtkGenericOpenGLRenderWindow* window, std::mt19937& randEng);
+void DrawLine(vtkRenderer* renderer, int startX, int startY, int endX, int endY);
 
-    class MouseInteractorStylePP : public vtkInteractorStyleTrackballCamera
-    {
-    private:
-        vtkSmartPointer<vtkLineSource> lineSource = vtkSmartPointer<vtkLineSource>::New();
-        vtkSmartPointer<vtkActor> Lineactor = vtkSmartPointer<vtkActor>::New();
-    public:
-        static MouseInteractorStylePP* New();
-        vtkTypeMacro(MouseInteractorStylePP, vtkInteractorStyleTrackballCamera);
-        int check = 0;
-        double picked[3];
-        void setlinesource(vtkSmartPointer<vtkLineSource> lSource) {
-            lineSource = lSource;
-        }
-        void setlineactor(vtkSmartPointer<vtkActor> lactor){
-            Lineactor = lactor;
-        }
-        vtkSmartPointer<vtkLineSource> getlineSource()
-        {
-            return lineSource;
-        }
-        vtkSmartPointer<vtkActor> getLineactor() {
-            return Lineactor;
-        }
-        virtual void OnLeftButtonDown() override
-        {
-            // Print the pixel coordinates of the mouse click event to the console
-            std::cout << "Picking pixel: " << this->Interactor->GetEventPosition()[0]
-                << " " << this->Interactor->GetEventPosition()[1] << std::endl;
-
-            // Use the vtkPicker to pick an object in the scene at the location of the mouse click event
-            this->Interactor->GetPicker()->Pick(
-                this->Interactor->GetEventPosition()[0], // x-coordinate of the mouse click event
-                this->Interactor->GetEventPosition()[1], // y-coordinate of the mouse click event
-                0, // always zero (z-coordinate of the mouse click event)
-                this->Interactor->GetRenderWindow()
-                ->GetRenderers()
-                ->GetFirstRenderer() // pick from the first renderer in the render window
-            );
-
-            // Get the 3D position of the pick location
-            this->Interactor->GetPicker()->GetPickPosition(picked);
-
-            // Print the 3D coordinates of the picked location to the console
-            std::cout << "Picked value: " << picked[0] << " " << picked[1] << " "
-                << picked[2] << std::endl;
-
-            // Increment the check variable to keep track of the number of clicks
-            check++;
-
-            // If this is the first click, set the first point and draw a temporary line
-            if (check == 1) {
-                this->SetFirstPoint();
-                this->SetSecondPoint();
-                this->DrawLine();
-            }
-            // If this is the second click, set the second point, draw the final line, and reset the check variable
-            else if (check == 2) {
-                this->SetSecondPoint();
-                check = 0;
-                this->DrawLine();
-            }
-
-            // Get the renderer and the render window
-            vtkSmartPointer<vtkRenderer> renderer = this->Interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
-            vtkSmartPointer<vtkRenderWindow> renderWindow = this->Interactor->GetRenderWindow();
-
-            // Create a vtkTextActor and a vtkTextWidget to display the coordinates
-            vtkSmartPointer<vtkNamedColors> colors = vtkSmartPointer<vtkNamedColors>::New();
-            vtkSmartPointer<vtkTextActor> textActor = vtkSmartPointer<vtkTextActor>::New();
-            textActor->SetInput("(0, 0)");
-            textActor->GetTextProperty()->SetColor(colors->GetColor3d("White").GetData());
-            textActor->GetTextProperty()->SetFontSize(30);
-            textWidget->SetInteractor(renderWindowInteractor);
-            textWidget->SetRepresentation(vtkSmartPointer<vtkTextRepresentation>::New());
-            textWidget->GetTextActor()->SetPosition2(0.2, 0.15);
-            textWidget->GetTextActor()->SetDisplayPosition(60, 10);
-
-            // Get the size of the renderer
-            int* rendererSize = renderer->GetSize();
-
-            // Calculate the middle position for the text
-            int xPosition = rendererSize[0] / 2;
-            int yPosition = 10 + textActor->GetTextProperty()->GetFontSize() + (rendererSize[1] - textActor->GetTextProperty()->GetFontSize() - 20) / 2;
-
-            textWidget->GetTextActor()->SetPosition2(0, 0); // Reset the position of the text actor
-            textWidget->GetTextActor()->SetDisplayPosition(xPosition, yPosition); // Set the new position for the text actor
-
-            textWidget->SelectableOff();
-
-            // Add the vtkTextActor to the renderer
-            renderer->AddActor2D(textActor);
-
-            // Enable the vtkTextWidget
-            textWidget->SetEnabled(true);
-
-            // Set the coordinates as the text for the vtkTextActor
-            std::string text = "(" + std::to_string(picked[0]) + ", " + std::to_string(picked[1]) + ")";
-            textActor->SetInput(text.c_str());
-
-
-            // Forward the left button down event to the parent class vtkInteractorStyleTrackballCamera
-            vtkInteractorStyleTrackballCamera::OnLeftButtonDown();
-        }
-        virtual void SetFirstPoint() {
-            lineSource->SetPoint1(picked[0], picked[1], picked[2]); // Set the first endpoint of the line
-            return;
-        }
-        virtual void SetSecondPoint() {
-            lineSource->SetPoint2(picked[0], picked[1], picked[2]); // Set the second endpoint of the line
-            return;
-        }
-        virtual void DrawLine() {
-            // Remove any previously drawn objects from the renderer
-            this->Interactor->GetRenderWindow()
-                ->GetRenderers()
-                ->GetFirstRenderer()
-                ->RemoveAllViewProps();
-
-            // Create a mapper and actor for the line
-            vtkNew<vtkPolyDataMapper> mapper;
-            mapper->SetInputConnection(lineSource->GetOutputPort());
-
-            //vtkNew<vtkActor> lineActor;
-            //lineActor->SetMapper(mapper);
-            Lineactor->GetProperty()->SetColor(1.0, 0.0, 0.0);
-
-            // Add the actor to the renderer
-            this->Interactor->GetRenderWindow()
-                ->GetRenderers()
-                ->GetFirstRenderer()
-                ->AddActor(Lineactor);
-
-            // Render the scene
-            this->Interactor->GetRenderWindow()->Render();
-        }
-
-    };
-    vtkStandardNewMacro(MouseInteractorStylePP);
+void Change_Shapes(QComboBox* comboBox,
+    vtkGenericOpenGLRenderWindow* window);
 } // namespace
 
 int main(int argc, char* argv[])
 {
+  QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
 
-    // Create a new instance of a Qt application
-    QApplication app(argc, argv);
+  QApplication app(argc, argv);
 
-    // main window
-    QMainWindow mainWindow;
-    mainWindow.setWindowTitle("Line Drawer");
-    mainWindow.resize(1200, 900);
+  // main window
+  QMainWindow mainWindow;
+  mainWindow.setWindowTitle("Computer Graphics & Visualization");
+  mainWindow.resize(1200, 900);
 
-    // control area
-    QDockWidget controlDock;  // Declare a new instance of a QDockWidget named controlDock.
-    mainWindow.addDockWidget(Qt::LeftDockWidgetArea, &controlDock);   // Add the controlDock widget to the main window on the left side of the window.
+  // control area
+  QDockWidget controlDock;
+  mainWindow.addDockWidget(Qt::LeftDockWidgetArea, &controlDock);
 
-    QLabel controlDockTitle("Control Dock"); // Declare a new instance of a QLabel named controlDockTitle with the text "Control Dock".
-    controlDockTitle.setMargin(20);   //Set the margin of the controlDockTitle label to 20 pixels.
-    controlDock.setTitleBarWidget(&controlDockTitle);   //Set the title bar widget of controlDock to controlDockTitle.
+  QLabel controlDockTitle("Control Dock");
+  controlDockTitle.setMargin(20);
+  controlDock.setTitleBarWidget(&controlDockTitle);
 
-    QVBoxLayout* dockLayout = new QVBoxLayout();   //Declare a new instance of a QVBoxLayout named dockLayout.
-    QWidget layoutContainer;   //Declare a new instance of a QWidget named layoutContainer.
-    layoutContainer.setLayout(dockLayout);     //Set the layout of layoutContainer to dockLayout. 
-    controlDock.setWidget(&layoutContainer);      //Set the widget of controlDock to layoutContainer/ Create a new MouseInteractorStylePP object
+  QPointer<QVBoxLayout> dockLayout = new QVBoxLayout();
+  QWidget layoutContainer;
+  layoutContainer.setLayout(dockLayout);
+  controlDock.setWidget(&layoutContainer);
 
-    vtkSmartPointer<vtkActor> actor = vtkSmartPointer<vtkActor>::New();
-    // Save Button 
-    QPushButton* saveButton = new QPushButton("Save");
-    dockLayout->addWidget(saveButton);
+  QPushButton randomizeButton;
+  randomizeButton.setText("Randomize");
+  dockLayout->addWidget(&randomizeButton);
 
-    // Upload Button 
-    QPushButton* uploadButton = new QPushButton("Upload");
-    dockLayout->addWidget(uploadButton);
+  // Save Button 
+  QPushButton saveButton;
+  saveButton.setText("Save");
+  dockLayout->addWidget(&saveButton);
 
-    // Change color Button 
-    QPushButton* changeColorButton = new QPushButton("Change color");
-    dockLayout->addWidget(changeColorButton);
+  // Upload Button 
+  QPushButton uploadButton;
+  uploadButton.setText("Upload");
+  dockLayout->addWidget(&uploadButton);
 
-    // Color droplist
-    QComboBox* colorDroplist = new QComboBox();
-    colorDroplist->addItem("Red");
-    colorDroplist->addItem("Green");
-    colorDroplist->addItem("Blue");
-    colorDroplist->addItem("Yellow");
-    colorDroplist->addItem("Magenta");
-    colorDroplist->setCurrentIndex(0); // Set default value
-    dockLayout->addWidget(colorDroplist);
+  // Change color Button 
+  QPushButton* changeColorButton = new QPushButton("Change color");
+  dockLayout->addWidget(changeColorButton);
 
-    // Thickness Slider
-    QSlider* thicknessSlider = new QSlider(Qt::Horizontal);
-    thicknessSlider->setMinimum(1);
-    thicknessSlider->setMaximum(10);
-    thicknessSlider->setValue(1); // Set default value
-    dockLayout->addWidget(thicknessSlider);
+  // Color droplist
+  QComboBox* colorDroplist = new QComboBox();
+  colorDroplist->addItem("Red");
+  colorDroplist->addItem("Green");
+  colorDroplist->addItem("Blue");
+  colorDroplist->addItem("Yellow");
+  colorDroplist->addItem("Magenta");
+  colorDroplist->addItem("Black");
+  colorDroplist->addItem("White");
+  colorDroplist->setCurrentIndex(0); // Set default value
+  dockLayout->addWidget(colorDroplist);
+
+  // Thickness Slider
+  QSlider* thicknessSlider = new QSlider(Qt::Horizontal);
+  thicknessSlider->setMinimum(1);
+  thicknessSlider->setMaximum(20);
+  thicknessSlider->setValue(1); // Set default value
+  dockLayout->addWidget(thicknessSlider);
+
+  // Chooosing Shapes to draw button
+  QPushButton* changeshapes = new QPushButton("Change Shape");
+  dockLayout->addWidget(changeshapes);
+
+  // Shapes droplist
+  QComboBox* shapesdroplist = new QComboBox();
+  shapesdroplist->addItem("Line");
+  shapesdroplist->addItem("Polyline");
+  shapesdroplist->addItem("Polygon");
+  shapesdroplist->addItem("Regular Polygon");
+  shapesdroplist->addItem("Circle");
+  shapesdroplist->addItem("Arc");
+  shapesdroplist->addItem("Ellipse");
+  shapesdroplist->addItem("Cone");
+  shapesdroplist->addItem("Cylinder");
+  shapesdroplist->addItem("Hexahedron");
+  shapesdroplist->addItem("Triangle Strip");
+  shapesdroplist->addItem("Sphere");
+  shapesdroplist->addItem("Square");
+  shapesdroplist->addItem("Text");
+  shapesdroplist->setCurrentIndex(0); // Set default value
+  dockLayout->addWidget(shapesdroplist);
+
+  // render area
+  QPointer<QVTKOpenGLNativeWidget> vtkRenderWidget =
+      new QVTKOpenGLNativeWidget();
+  mainWindow.setCentralWidget(vtkRenderWidget);
+
+  // VTK part
+  vtkNew<vtkGenericOpenGLRenderWindow> window;
+  vtkRenderWidget->setRenderWindow(window.Get());
+
+  vtkNew<vtkSphereSource> sphere;
+  sphere->SetRadius(1.0);
+  sphere->SetThetaResolution(100);
+  sphere->SetPhiResolution(100);
+
+  mapper->SetInputConnection(sphere->GetOutputPort());
+
+  vtkNew<vtkActor> actor;
+  actor->SetMapper(mapper);
+  actor->GetProperty()->SetEdgeVisibility(true);
+  actor->GetProperty()->SetRepresentationToSurface();
+
+  //vtkNew<vtkRenderer> renderer;
+  renderer->AddActor(actor);
+
+  window->AddRenderer(renderer);
+
+  // setup initial status
+  std::mt19937 randEng(0);
+  ::Randomize(sphere, mapper, window, randEng);
+
+  // connect the buttons
+  QObject::connect(&randomizeButton, &QPushButton::released,
+                   [&]() { ::Randomize(sphere, mapper, window, randEng); });
+
+  // Use a lambda function with capture by reference
+  QObject::connect(changeshapes, &QPushButton::clicked,
+      [=, &shapesdroplist, &window]() { Change_Shapes(shapesdroplist, window); });
 
 
-    //Lineactor = vtkSmartPointer<vtkActor>::New(); // Fix the typo here
-    vtkSmartPointer<vtkActor> Lineactor = vtkSmartPointer<vtkActor>::New();
 
-    // render area
-    QPointer<QVTKOpenGLNativeWidget> vtkRenderWidget = new QVTKOpenGLNativeWidget();
-    mainWindow.setCentralWidget(vtkRenderWidget);
+  mainWindow.show();
 
-    // VTK part
-    //vtkNew<vtkGenericOpenGLRenderWindow> window;
-    vtkRenderWidget->setRenderWindow(window.Get());
+  return app.exec();
+}
 
-    //// Connect Save button
-    //QString filename = "data.txt";  // Example filename
-    //QObject::connect(saveButton, &QPushButton::released, [&]() {
-    //    ::Save(filename.toStdString().c_str()); 
-    //    });
+namespace {
+void Randomize(vtkSphereSource* sphere, vtkMapper* mapper,
+               vtkGenericOpenGLRenderWindow* window, std::mt19937& randEng)
+{
+  // generate randomness
+  double randAmp = 0.2 + ((randEng() % 1000) / 1000.0) * 0.2;
+  double randThetaFreq = 1.0 + (randEng() % 9);
+  double randPhiFreq = 1.0 + (randEng() % 9);
 
-    //// Connect Upload button
-    //QObject::connect(uploadButton, &QPushButton::clicked, [&]() {
-    //    ::Upload(); 
-    //    });
+  // extract and prepare data
+  sphere->Update();
+  vtkSmartPointer<vtkPolyData> newSphere;
+  newSphere.TakeReference(sphere->GetOutput()->NewInstance());
+  newSphere->DeepCopy(sphere->GetOutput());
+  vtkNew<vtkDoubleArray> height;
+  height->SetName("Height");
+  height->SetNumberOfComponents(1);
+  height->SetNumberOfTuples(newSphere->GetNumberOfPoints());
+  newSphere->GetPointData()->AddArray(height);
 
-    //// Connect Change Color 
-    //QObject::connect(changeColorButton, &QPushButton::clicked, [=]() {
-    //    ChangeColor(colorDroplist, Lineactor);
-    //    });
+  // deform the sphere
+  for (int iP = 0; iP < newSphere->GetNumberOfPoints(); iP++)
+  {
+    double pt[3] = {0.0};
+    newSphere->GetPoint(iP, pt);
+    double theta = std::atan2(pt[1], pt[0]);
+    double phi =
+        std::atan2(pt[2], std::sqrt(std::pow(pt[0], 2) + std::pow(pt[1], 2)));
+    double thisAmp =
+        randAmp * std::cos(randThetaFreq * theta) * std::sin(randPhiFreq * phi);
+    height->SetValue(iP, thisAmp);
+    pt[0] += thisAmp * std::cos(theta) * std::cos(phi);
+    pt[1] += thisAmp * std::sin(theta) * std::cos(phi);
+    pt[2] += thisAmp * std::sin(phi);
+    newSphere->GetPoints()->SetPoint(iP, pt);
+  }
+  newSphere->GetPointData()->SetScalars(height);
 
-    //// Connect Change Thickness
-    //QObject::connect(thicknessSlider, &QSlider::valueChanged, [&]() {
-    //    int thickness = thicknessSlider->value();
-    //    UpdateLineThickness(thickness, Lineactor);
-    //    });
+  // reconfigure the pipeline to take the new deformed sphere
+  mapper->SetInputDataObject(newSphere);
+  mapper->SetScalarModeToUsePointData();
+  mapper->ColorByArrayComponent("Height", 0);
+  window->Render();
+}
 
-    vtkNew<vtkPointPicker> pointPicker; // Create a new instance of the VTK point picker
-    vtkNew<vtkDataSetMapper> mapper;
-    mapper->SetInputConnection(lineSource->GetOutputPort()); // Set the input of the mapper to the output of the line source
+void Draw_circle()
+{
+    double R = 5.0; // Radius of the circle
+    int numPoints = 100; // Number of points to approximate the circle
+
+    lineSource->SetResolution(numPoints);
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+
+    // Generate points on the circle using parametric equations
+    for (int i = 0; i <= numPoints; i++)
+    {
+        double t = static_cast<double>(i) / numPoints;
+        double x = R * cos(2 * vtkMath::Pi() * t);
+        double y = R * sin(2 * vtkMath::Pi() * t);
+        points->InsertNextPoint(x, y, 0.0); // Insert points on the circle
+    }
+    lineSource->SetPoints(points);
+
+    // Update the mapper with the new data
+    mapper->SetInputConnection(lineSource->GetOutputPort());
     mapper->Update();
-    Lineactor->SetMapper(mapper); // Set the mapper for the actor
-    Lineactor->GetProperty()->SetColor(1, 0.8941, 0.8824); // Set the color of the actor's property
-    vtkNew <MouseInteractorStylePP> style; // Create a new instance of a custom VTK interactor style
-    vtkNew<vtkRenderer> renderer;
-    renderer->AddActor(Lineactor);
-    window->AddRenderer(renderer);    //add renderer to window   
-    renderer->SetBackground(0.4392, 0.502, 0.5647); // Set the background color of the renderer
-    window->GetInteractor()->SetPicker(pointPicker);    // connect between qt and vtk
-    window->SetInteractor(vtkRenderWidget->interactor());
-    window->GetInteractor()->SetInteractorStyle(style);
-    style->setlinesource(lineSource);
-    style->setlineactor(Lineactor);
-    //vtkRenderWidget->update();    //update render
-    window->Render();    // Render the window
-    // Connect Save button
-    QString filename = "data.txt";  // Example filename
-    QObject::connect(saveButton, &QPushButton::released, [&]() {
-        ::Save(filename.toStdString().c_str());
-        });
 
-    // Connect Upload button
-    QObject::connect(uploadButton, &QPushButton::clicked, [&]() {
-        ::Upload();
-        });
+    // Update the actor with the new mapper and properties based on user's choice
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the circle
+    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the circle
 
-    // Connect Change Color 
-    QObject::connect(changeColorButton, &QPushButton::clicked, [=]() {
-        ChangeColor(colorDroplist,Lineactor, lineSource);
-        });
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
+}
 
-    // Connect Change Thickness
-    QObject::connect(thicknessSlider, &QSlider::valueChanged, [&]() {
-        int thickness = thicknessSlider->value();
-        UpdateLineThickness(thickness, Lineactor);
-        });
+void Draw_Ellipse() {
+    // Create an ellipse using parametric equations
+    double A = 5.0; // Major axis length
+    double B = 3.0; // Minor axis length
+    int numPoints = 100; // Number of points to approximate the ellipse
 
-    mainWindow.show();
-    //window->GetInteractor()->Start();    // Start the render window interactor event loop
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+    for (int i = 0; i <= numPoints; ++i) // Include the last point to complete the ellipse
+    {
+        double t = 2 * vtkMath::Pi() * static_cast<double>(i) / numPoints;
+        double x = A * cos(t);
+        double y = B * sin(t);
+        points->InsertNextPoint(x, y, 0.0);
+    }
 
-    return app.exec(); // Run the Qt application event loop and return the exit code
+    lineSource->SetPoints(points);
+
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the ellipse
+    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the ellipse
+
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
 
 }
+
+void Draw_Regular_Polygon() {
+    // Define parameters for the regular polygon
+    double R = 5.0; // Radius of the regular polygon
+    int numPoints = 6; // Number of points to approximate the regular polygon
+    double angleIncrement = 2 * vtkMath::Pi() / numPoints; // Angle increment between consecutive points
+
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+
+    // Generate points on the regular polygon using parametric equation
+    for (int i = 0; i <= numPoints; i++)
+    {
+        double angle = i * angleIncrement;
+        double x = R * cos(angle);
+        double y = R * sin(angle);
+        points->InsertNextPoint(x, y, 0.0); // Insert points on the regular polygon
+    }
+
+    // Set the points as the input points for the line source
+    lineSource->SetPoints(points);
+
+    // Update the mapper with the line source output
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+
+    // Update the actor with the mapper and properties
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the regular polygon
+    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the regular polygon
+
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
+}
+
+void Draw_Arc() {
+    // Define parameters for the arc
+    double R = 5.0; // Radius of the arc
+    double startAngle = 1.0; // Start angle of the arc in radians
+    double endAngle = vtkMath::Pi(); // End angle of the arc in radians
+    int numPoints = 100; // Number of points to approximate the arc
+
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+
+    // Generate points on the arc using parametric equation
+    double angleIncrement = (endAngle - startAngle) / numPoints;
+    for (int i = 0; i <= numPoints; i++)
+    {
+        double angle = startAngle + i * angleIncrement;
+        double x = R * cos(angle);
+        double y = R * sin(angle);
+        points->InsertNextPoint(x, y, 0.0); // Insert points on the arc
+    }
+
+    // Set the points as the input points for the line source
+    lineSource->SetPoints(points);
+
+    // Update the mapper with the line source output
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+
+    // Update the actor with the mapper and properties
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the arc
+    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the arc
+
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
+
+}
+
+void Draw_Cylinder() {
+    // Define parameters for the cylinder
+    double R = 5.0; // Radius of the cylinder
+    double H = 10.0; // Height of the cylinder
+    int numPoints = 1000; // Number of points to approximate the cylinder
+
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+
+    // Generate points on the cylinder using parametric equation
+    double angleIncrement = 2 * vtkMath::Pi() / numPoints;
+    for (int i = 0; i <= numPoints; i++)
+    {
+        double angle = i * angleIncrement;
+        double x = R * cos(angle);
+        double y = R * sin(angle);
+        double z = (i % 2 == 0) ? H / 2.0 : -H / 2.0; // Alternate between positive and negative z values to create the top and bottom faces of the cylinder
+        points->InsertNextPoint(x, y, z); // Insert points on the cylinder
+    }
+
+    // Set the points as the input points for the line source
+    lineSource->SetPoints(points);
+
+    // Update the mapper with the line source output
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+
+    // Update the actor with the mapper and properties
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the cylinder
+    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the cylinder
+
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
+
+}
+
+void Draw_Cone() {
+}
+
+void Draw_Football() {
+    // Define parameters for the sphere
+    double R = 1.0; // Radius of the sphere
+    int numPointsTheta = 100; // Number of points in theta direction
+    int numPointsPhi = 100; // Number of points in phi direction
+
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+
+    // Generate points on the sphere using parametric equation
+    double thetaIncrement = vtkMath::Pi() / numPointsTheta;
+    double phiIncrement = 2 * vtkMath::Pi() / numPointsPhi;
+    for (int i = 0; i <= numPointsTheta; i++)
+    {
+        double theta = i * thetaIncrement;
+        for (int j = 0; j <= numPointsPhi; j++)
+        {
+            double phi = j * phiIncrement;
+            double x = R * sin(theta) * cos(phi);
+            double y = R * sin(theta) * sin(phi);
+            double z = R * cos(theta);
+            points->InsertNextPoint(x, y, z); // Insert points on the sphere
+        }
+    }
+
+    // Set the points as the input points for the line source
+    lineSource->SetPoints(points);
+
+    // Update the mapper with the line source output
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+
+    // Update the actor with the mapper and properties
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(0.0, 1.0, 0.0); // Set color of the sphere
+
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
+
+}
+
+void Draw_Square() {
+
+}
+//void DrawLine(vtkRenderer* renderer, int startX, int startY, int endX, int endY)
+//{
+//    // Convert start and end points from window coordinates to normalized device coordinates (NDC)
+//    double startXNDC = (double)startX / renderer->GetRenderWindow()->GetSize()[0] * 2.0 - 1.0;
+//    double startYNDC = (double)startY / renderer->GetRenderWindow()->GetSize()[1] * 2.0 - 1.0;
+//    double endXNDC = (double)endX / renderer->GetRenderWindow()->GetSize()[0] * 2.0 - 1.0;
+//    double endYNDC = (double)endY / renderer->GetRenderWindow()->GetSize()[1] * 2.0 - 1.0;
+//
+//    // Create points for the start and end points
+//    vtkNew<vtkPoints> points;
+//    points->InsertNextPoint(startXNDC, startYNDC, 0.0);
+//    points->InsertNextPoint(endXNDC, endYNDC, 0.0);
+//
+//    // Create a line source with the points
+//    vtkNew<vtkLineSource> lineSource;
+//    lineSource->SetPoints(points);
+//
+//    // Update the line source to compute the parametric coordinates
+//    lineSource->Update();
+//
+//    // Create a mapper for the line
+//    vtkNew<vtkPolyDataMapper> mapper;
+//    mapper->SetInputConnection(lineSource->GetOutputPort());
+//
+//    // Create an actor for the line
+//    vtkNew<vtkActor> actor;
+//    actor->SetMapper(mapper);
+//    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set line color to red
+//
+//    // Add the actor to the renderer
+//    renderer->AddActor(actor);
+//
+//    // Render the scene
+//    renderer->GetRenderWindow()->Render();
+//}
+
+void Change_Shapes(QComboBox* comboBox,
+    vtkGenericOpenGLRenderWindow* window)
+{
+    // Remove any existing actors from the renderer
+    //renderer->RemoveAllViewProps();
+
+    QString shape_name = comboBox->currentText();
+
+    if (shape_name == "Circle")
+    {
+        Draw_circle();
+    }
+    else if (shape_name == "Sphere") {
+        Draw_Football();
+    }
+    else if (shape_name == "Arc")
+    {
+        Draw_Arc();
+    }
+    else if (shape_name == "Hexahedron")
+    {
+        //bool ok;
+        //// Get the center of the circle from the user using a QInputDialog
+        //double len = QInputDialog::getDouble(nullptr, "Enter the length", "Enter the length of the each side of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
+        //if (!ok) {
+        //    return;
+        //}
+        //QMessageBox messageBox;
+        //messageBox.setText("Choose Region Type");
+        //QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("Filled"), QMessageBox::YesRole);
+        //QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("Non-Filled"), QMessageBox::YesRole);
+        //messageBox.exec();
+        //QString buttonText = messageBox.clickedButton()->text();
+        //std::string mode = buttonText.toStdString();
+        //Draw_Hexahedron("Red", 1.0, mode, len);
+    }
+    else if (shape_name == "Line")
+    {
+        //Draw_Line();
+    }
+    else if (shape_name == "Cone") {
+        Draw_Cone();
+    }
+    else if (shape_name == "Regular Polygon")
+    {
+        Draw_Regular_Polygon();
+    }
+    else if (shape_name == "Cylinder") {
+        Draw_Cylinder();
+    }
+    else if (shape_name == "Ellipse") {
+        Draw_Ellipse();
+    }
+    else if (shape_name == "Triangle Strip") {
+        //bool ok;
+        //// Get the center of the circle from the user using a QInputDialog
+        //double len = QInputDialog::getDouble(nullptr, "Enter the length", "Enter the length of the each side of the Triangle Strip:", 0.0, -100.0, 100.0, 2, &ok);
+        //if (!ok) {
+        //    return;
+        //}
+        //Draw_TriangleStrip("Red", 1.0, len);
+    }
+    else if (shape_name == "Text") {
+        //// Prompt user for text and font size
+        //QString text = QInputDialog::getText(nullptr, "Text Input", "Enter text:");
+        //bool ok;
+        //int fontSize = QInputDialog::getInt(nullptr, "Font Size Input", "Enter font size:", 24, 1, 100, 1, &ok);
+        //if (!ok) return; // User cancelled input dialog
+        //Draw_Text(text, fontSize, "Red");
+    }
+    else if (shape_name == "Square") {
+        Draw_Square();
+    }
+    // Reset the camera and render the window
+    //window->Render();
+    window->Render();
+    // 
+    //renderer->ResetCamera();
+}
+} // namespace
