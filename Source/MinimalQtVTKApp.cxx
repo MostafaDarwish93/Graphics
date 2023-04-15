@@ -52,6 +52,10 @@ double Radius_Sphere;
 double Radius_Arc;
 double Radius_Reg_Polygon;
 int NO_POINTS;
+double Radius_Cylinder;
+double Height_Cylinder;
+double MAJOR_AXIS;
+double MINOR_AXIS;
 bool Poly_Line = 0;
 
 
@@ -335,10 +339,10 @@ void Draw_circle(double radius)
     renderer->AddActor(actor);
 }
 
-void Draw_Ellipse() {
+void Draw_Ellipse(double x_axis, double y_axis) {
     // Create an ellipse using parametric equations
-    double A = 5.0; // Major axis length
-    double B = 3.0; // Minor axis length
+    double A = x_axis; // Major axis length
+    double B = y_axis; // Minor axis length
     int numPoints = 100; // Number of points to approximate the ellipse
 
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
@@ -430,10 +434,10 @@ void Draw_Arc(double radius) {
 
 }
 
-void Draw_Cylinder() {
+void Draw_Cylinder(double radius, double height) {
     // Define parameters for the cylinder
-    double R = 5.0; // Radius of the cylinder
-    double H = 10.0; // Height of the cylinder
+    double R = radius; // Radius of the cylinder
+    double H = height; // Height of the cylinder
     int numPoints = 1000; // Number of points to approximate the cylinder
 
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
@@ -498,7 +502,7 @@ void Draw_Football(double radius) {
     // Define parameters for the sphere
     double R = radius; // Radius of the sphere
     int numPointsTheta = 100; // Number of points in theta direction
-    int numPointsPhi = 100; // Number of points in phi direction
+    int numPointsPhi = 50; // Number of points in phi direction
 
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
 
@@ -627,6 +631,7 @@ void DrawLine(vtkRenderer* renderer, vtkPoints* points) {
 }
 
 void DrawPoly_Line(vtkRenderer* renderer, vtkPoints* points) {
+
 }
 
 void Save(QComboBox* comboBox){
@@ -662,18 +667,22 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+        QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+        QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
 
-        // If the user didn't cancel the file dialog, write to the output file
-        if (!filename.isEmpty()) {
-            // Open the output file for writing
-            std::ofstream outputFile(filename.toStdString());
+        // If the user didn't cancel the file dialogs, write to the output files
+        if (!filename_csv.isEmpty() && !filename_txt.isEmpty()) {
+            // Open the CSV output file for writing
+            std::ofstream outputFile_csv(filename_csv.toStdString());
+            outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
+            outputFile_csv << "Circle," << radius << "," << color_name << "," << thickness << std::endl;
+            outputFile_csv.close();
 
-            outputFile << "Shape\tRadius\tColor\tThickness" << std::endl;
-            outputFile << "Circle\t" << radius << "\t" << color_name << "\t" << thickness  << std::endl;
-
-            // Close the output file
-            outputFile.close();
+            // Open the TXT output file for writing
+            std::ofstream outputFile_txt(filename_txt.toStdString());
+            outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
+            outputFile_txt << "Circle\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+            outputFile_txt.close();
         }
     }
     if (shape_name == "Sphere") {
@@ -707,18 +716,22 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+        QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+        QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
 
-        // If the user didn't cancel the file dialog, write to the output file
-        if (!filename.isEmpty()) {
-            // Open the output file for writing
-            std::ofstream outputFile(filename.toStdString());
+        // If the user didn't cancel the file dialogs, write to the output files
+        if (!filename_csv.isEmpty() && !filename_txt.isEmpty()) {
+            // Open the CSV output file for writing
+            std::ofstream outputFile_csv(filename_csv.toStdString());
+            outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
+            outputFile_csv << "Sphere," << radius << "," << color_name << "," << thickness << std::endl;
+            outputFile_csv.close();
 
-            outputFile << "Shape\tRadius\tColor\tThickness" << std::endl;
-            outputFile << "Sphere\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
-
-            // Close the output file
-            outputFile.close();
+            // Open the TXT output file for writing
+            std::ofstream outputFile_txt(filename_txt.toStdString());
+            outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
+            outputFile_txt << "Sphere\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+            outputFile_txt.close();
         }
     }
     if (shape_name == "Arc") {
@@ -810,6 +823,50 @@ void Save(QComboBox* comboBox){
             outputFile.close();
         }
     }
+    if (shape_name == "Square") {
+        //Get the color and thickness 
+        double* color = actor->GetProperty()->GetColor();
+        double thickness = actor->GetProperty()->GetLineWidth();
+        string color_name;
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            outputFile << "Shape\tColor\tThickness" << std::endl;
+            outputFile << "Square\t" << color_name << "\t" << thickness << std::endl;
+
+            // Close the output file
+            outputFile.close();
+        }
+    }
     if (shape_name == "Regular Polygon") {
         double radius = Radius_Reg_Polygon;
         int number_points = NO_POINTS;
@@ -851,6 +908,98 @@ void Save(QComboBox* comboBox){
 
             outputFile << "Shape\t\t\tRadius\tNumber of points\tColor\tThickness" << std::endl;
             outputFile << "Regular Polygon\t" << "\t" << radius << "\t" << number_points << "\t\t\t" << color_name << "\t" << thickness << std::endl;
+
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    if (shape_name == "Cylinder") {
+        double radius = Radius_Cylinder;
+        double height = Height_Cylinder;
+        //Get the color and thickness of the line
+        double* color = actor->GetProperty()->GetColor();
+        double thickness = actor->GetProperty()->GetLineWidth();
+        string color_name;
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            outputFile << "Shape\t\tRadius\tHeight\tColor\tThickness" << std::endl;
+            outputFile << "Cylinder\t" << radius << "\t" << height << "\t" << color_name << "\t" << thickness << std::endl;
+
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    if (shape_name == "Ellipse") {
+        double x_axis = MAJOR_AXIS;
+        double y_axis = MINOR_AXIS;
+        //Get the color and thickness of the line
+        double* color = actor->GetProperty()->GetColor();
+        double thickness = actor->GetProperty()->GetLineWidth();
+        string color_name;
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            outputFile << "Shape\tMajor Axis\tMinor Axis\tColor\tThickness" << std::endl;
+            outputFile << "Ellipse\t" << x_axis << "\t\t" << y_axis << "\t\t" << color_name << "\t" << thickness << std::endl;
 
             // Close the output file
             outputFile.close();
@@ -965,10 +1114,28 @@ void Change_Shapes(QComboBox* comboBox,
         Draw_Regular_Polygon(Radius_Reg_Polygon, NO_POINTS);
     }
     else if (shape_name == "Cylinder") {
-        Draw_Cylinder();
+        bool ok;
+        Radius_Cylinder = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Cylinder:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Height_Cylinder = QInputDialog::getDouble(nullptr, "Enter Height", "Enter the height of the Cylinder:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Cylinder(Radius_Cylinder, Height_Cylinder);
     }
     else if (shape_name == "Ellipse") {
-        Draw_Ellipse();
+        bool ok;
+        MAJOR_AXIS = QInputDialog::getDouble(nullptr, "Enter Major Axis", "Enter the major axis (x) of the Ellipse:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        MINOR_AXIS = QInputDialog::getDouble(nullptr, "Enter Minor Axis", "Enter the minor axis (y) of the Ellipse:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Ellipse(MAJOR_AXIS, MINOR_AXIS);
     }
     else if (shape_name == "Triangle Strip") {
     }
