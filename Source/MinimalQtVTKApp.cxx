@@ -2,12 +2,19 @@
 #include <vtkActor.h>
 #include <vtkDataSetMapper.h>
 #include <vtkDoubleArray.h>
-#include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkPointData.h>
 #include <vtkProperty.h>
 #include <vtkRenderer.h>
 #include <vtkSphereSource.h>
+#include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkLineSource.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkRenderWindow.h>
+#include <vtkRendererCollection.h>
+#include <vtkInteractorStyleTrackballCamera.h>
+#include <vtkPointPicker.h>
+#include <vtkCallbackCommand.h>
+#include <vtkNamedColors.h>
 
 #include <QApplication>
 #include <QDockWidget>
@@ -28,6 +35,8 @@
 #include <qmessagebox.h>
 #include <vtkRegularPolygonSource.h>
 #include <vtkPolyDataMapper.h>
+#include <vtkPolyDataWriter.h>
+#include <vtkCoordinate.h>
 using namespace std;
 
 vtkNew<vtkRenderer> renderer;
@@ -37,30 +46,82 @@ vtkSmartPointer<vtkActor> actor = vtkSmartPointer<vtkActor>::New();
 vtkDataSetMapper* mapper = vtkDataSetMapper::New();
 vtkSmartPointer<vtkLineSource> lineSource = vtkSmartPointer<vtkLineSource>::New();
 
+/// Global Initialization
+double Radius_Circle;
+double Radius_Sphere;
+double Radius_Arc;
+double Radius_Reg_Polygon;
+int NO_POINTS;
+bool Poly_Line = 0;
 
 
 namespace {
-/**
- * Deform the sphere source using a random amplitude and modes and render it in
- * the window
- *
- * @param sphere the original sphere source
- * @param mapper the mapper for the scene
- * @param window the window to render to
- * @param randEng the random number generator engine
- */
 void Randomize(vtkSphereSource* sphere, vtkMapper* mapper,
                vtkGenericOpenGLRenderWindow* window, std::mt19937& randEng);
-void DrawLine(vtkRenderer* renderer, int startX, int startY, int endX, int endY);
 
-void Change_Shapes(QComboBox* comboBox,
-    vtkGenericOpenGLRenderWindow* window);
+void DrawLine(vtkRenderer* renderer, vtkPoints* points);
+
+void DrawPoly_Line(vtkRenderer* renderer, vtkPoints* points);
+
+void Change_Shapes(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window);
+
+void ChangeColor(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window);
+
+void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window);
+
+void Save(QComboBox* comboBox);
+} // namespace
+
+namespace {
+    class MouseInteractorStyleDrawLine : public vtkInteractorStyleTrackballCamera
+    {
+    public:
+        static MouseInteractorStyleDrawLine* New();
+        vtkTypeMacro(MouseInteractorStyleDrawLine, vtkInteractorStyleTrackballCamera);
+
+        MouseInteractorStyleDrawLine()
+        {
+            this->Points = vtkSmartPointer<vtkPoints>::New();
+            this->Picker = vtkSmartPointer<vtkPointPicker>::New();
+        }
+
+        virtual void OnLeftButtonDown() override
+        {
+            this->Picker->Pick(this->Interactor->GetEventPosition()[0], this->Interactor->GetEventPosition()[1], 0, this->Renderer);
+            double point[3];
+            this->Picker->GetPickPosition(point);
+            std::cout << "Point: " << point[0] << ", " << point[1] << ", " << point[2] << std::endl;
+            this->Points->InsertNextPoint(point);
+
+            // Draw the line
+            if (this->Points->GetNumberOfPoints() > 1 && Poly_Line == false)
+            {
+                DrawLine(renderer, this->Points);
+            }
+            else {
+                DrawPoly_Line(renderer, this->Points);
+            }
+
+
+            // Forward events
+            vtkInteractorStyleTrackballCamera::OnLeftButtonDown();
+        }
+
+        void SetRenderer(vtkRenderer* renderer)
+        {
+            this->Renderer = renderer;
+        }
+
+    private:
+        vtkSmartPointer<vtkPoints> Points;
+        vtkRenderer* Renderer;
+        vtkSmartPointer<vtkPointPicker> Picker;
+    };
+    vtkStandardNewMacro(MouseInteractorStyleDrawLine);
 } // namespace
 
 int main(int argc, char* argv[])
 {
-  QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
-
   QApplication app(argc, argv);
 
   // main window
@@ -179,7 +240,19 @@ int main(int argc, char* argv[])
   QObject::connect(changeshapes, &QPushButton::clicked,
       [=, &shapesdroplist, &window]() { Change_Shapes(shapesdroplist, window); });
 
+  // Connect Change Color 
+  QObject::connect(changeColorButton, &QPushButton::clicked,
+      [=, &colorDroplist, &window]() { ChangeColor(colorDroplist, window); });
 
+  // Connect Change Thickness
+  QObject::connect(thicknessSlider, &QSlider::valueChanged, [&]() {
+      int thickness = thicknessSlider->value();
+      UpdateLineThickness(thickness, window);
+      });
+
+  // Connect save button
+  QObject::connect(&saveButton, &QPushButton::released,
+      [&]() {  ::Save(shapesdroplist); });
 
   mainWindow.show();
 
@@ -231,9 +304,9 @@ void Randomize(vtkSphereSource* sphere, vtkMapper* mapper,
   window->Render();
 }
 
-void Draw_circle()
+void Draw_circle(double radius)
 {
-    double R = 5.0; // Radius of the circle
+    double R = radius; // Radius of the circle
     int numPoints = 100; // Number of points to approximate the circle
 
     lineSource->SetResolution(numPoints);
@@ -290,10 +363,10 @@ void Draw_Ellipse() {
 
 }
 
-void Draw_Regular_Polygon() {
+void Draw_Regular_Polygon(double radius, int no_points) {
     // Define parameters for the regular polygon
-    double R = 5.0; // Radius of the regular polygon
-    int numPoints = 6; // Number of points to approximate the regular polygon
+    double R = radius; // Radius of the regular polygon
+    int numPoints = no_points; // Number of points to approximate the regular polygon
     double angleIncrement = 2 * vtkMath::Pi() / numPoints; // Angle increment between consecutive points
 
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
@@ -322,9 +395,9 @@ void Draw_Regular_Polygon() {
     renderer->AddActor(actor);
 }
 
-void Draw_Arc() {
+void Draw_Arc(double radius) {
     // Define parameters for the arc
-    double R = 5.0; // Radius of the arc
+    double R = radius; // Radius of the arc
     double startAngle = 1.0; // Start angle of the arc in radians
     double endAngle = vtkMath::Pi(); // End angle of the arc in radians
     int numPoints = 100; // Number of points to approximate the arc
@@ -392,12 +465,38 @@ void Draw_Cylinder() {
 
 }
 
-void Draw_Cone() {
+void Draw_Cone()
+{
+    // Set up the parameters for the cone
+    double height = 2.0;
+    double radius = 1.0;
+    int numSegments = 100; // Number of segments to create the cone
+
+    // Generate points for the cone using parametric equation
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+    for (int i = 0; i <= numSegments; ++i)
+    {
+        double angle = 2.0 * vtkMath::Pi() * i / numSegments;
+        double x = radius * std::cos(angle);
+        double y = radius * std::sin(angle);
+        double z = height * i / numSegments;
+        points->InsertNextPoint(x, y, z);
+    }
+
+    // Set the points as the input points for the line source
+    lineSource->SetPoints(points);
+
+    // Update the mapper with the line source output
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+
+    // Update the actor with the mapper and properties
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the cone
 }
 
-void Draw_Football() {
+void Draw_Football(double radius) {
     // Define parameters for the sphere
-    double R = 1.0; // Radius of the sphere
+    double R = radius; // Radius of the sphere
     int numPointsTheta = 100; // Number of points in theta direction
     int numPointsPhi = 100; // Number of points in phi direction
 
@@ -434,91 +533,436 @@ void Draw_Football() {
 
 }
 
-void Draw_Square() {
+void Draw_Square()
+{
+    // Define the coordinates of the four vertices of the square
+    double vertices[5][3] = { {-1.0, -1.0, 0.0}, {-1.0, 1.0, 0.0}, {1.0, 1.0, 0.0}, {1.0, -1.0, 0.0}, {-1.0, -1.0, 0.0} };
 
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+
+    // Insert the vertices as points in the points array
+    for (int i = 0; i < 5; i++) // Update the loop to include the last point (to connect back to the first point)
+    {
+        points->InsertNextPoint(vertices[i]);
+    }
+
+    // Set the points as the input points for the line source
+    lineSource->SetPoints(points);
+
+    // Update the mapper with the line source output
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+
+    // Update the actor with the mapper and properties
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the square
+
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
 }
-//void DrawLine(vtkRenderer* renderer, int startX, int startY, int endX, int endY)
-//{
-//    // Convert start and end points from window coordinates to normalized device coordinates (NDC)
-//    double startXNDC = (double)startX / renderer->GetRenderWindow()->GetSize()[0] * 2.0 - 1.0;
-//    double startYNDC = (double)startY / renderer->GetRenderWindow()->GetSize()[1] * 2.0 - 1.0;
-//    double endXNDC = (double)endX / renderer->GetRenderWindow()->GetSize()[0] * 2.0 - 1.0;
-//    double endYNDC = (double)endY / renderer->GetRenderWindow()->GetSize()[1] * 2.0 - 1.0;
-//
-//    // Create points for the start and end points
-//    vtkNew<vtkPoints> points;
-//    points->InsertNextPoint(startXNDC, startYNDC, 0.0);
-//    points->InsertNextPoint(endXNDC, endYNDC, 0.0);
-//
-//    // Create a line source with the points
-//    vtkNew<vtkLineSource> lineSource;
-//    lineSource->SetPoints(points);
-//
-//    // Update the line source to compute the parametric coordinates
-//    lineSource->Update();
-//
-//    // Create a mapper for the line
-//    vtkNew<vtkPolyDataMapper> mapper;
-//    mapper->SetInputConnection(lineSource->GetOutputPort());
-//
-//    // Create an actor for the line
-//    vtkNew<vtkActor> actor;
-//    actor->SetMapper(mapper);
-//    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set line color to red
-//
-//    // Add the actor to the renderer
-//    renderer->AddActor(actor);
-//
-//    // Render the scene
-//    renderer->GetRenderWindow()->Render();
-//}
+
+void Draw_Hexahedron()
+{
+    // Define the coordinates of the vertices of the upper part of the hexahedron
+    double upperVertices[5][3] = { {-1.0, -1.0, 1.0}, {-1.0, 1.0, 1.0}, {1.0, 1.0, 1.0}, {1.0, -1.0, 1.0},
+                                    {-1.0, -1.0, 1.0}};
+
+    // Define the coordinates of the vertices of the lower part of the hexahedron
+    double lowerVertices[5][3] = { {-1.0, -1.0, -1.0}, {-1.0, 1.0, -1.0}, {1.0, 1.0, -1.0}, {1.0, -1.0, -1.0},
+                                    {-1.0, -1.0, -1.0} };
+
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+
+    // Insert the vertices of the upper part of the hexahedron as points in the points array
+    for (int i = 0; i < 5; i++)
+    {
+        points->InsertNextPoint(upperVertices[i]);
+    }
+
+    // Insert the vertices of the lower part of the hexahedron as points in the points array
+    for (int i = 0; i < 5; i++)
+    {
+        points->InsertNextPoint(lowerVertices[i]);
+    }
+
+    points->InsertNextPoint(upperVertices[1]);
+    points->InsertNextPoint(lowerVertices[1]);
+    points->InsertNextPoint(lowerVertices[2]);
+    points->InsertNextPoint(upperVertices[2]);
+    points->InsertNextPoint(upperVertices[3]);
+    points->InsertNextPoint(lowerVertices[3]);
+    points->InsertNextPoint(lowerVertices[4]);
+    points->InsertNextPoint(upperVertices[4]);
+
+    // Set the points and cells as the input data for the line source
+    lineSource->SetPoints(points);
+    //lineSource->SetCells(VTK_HEXAHEDRON, hexahedronCells);
+
+    // Update the mapper with the line source output
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+
+    // Update the actor with the mapper and properties
+
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the hexahedron
+
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
+}
+
+void DrawLine(vtkRenderer* renderer, vtkPoints* points) {
+
+    lineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
+    lineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
+
+    // Create a mapper and actor for the line
+
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+
+    actor->SetMapper(mapper);
+    actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    actor->GetProperty()->SetLineWidth(3.0);
+
+    // Add the actor to the scene
+    renderer->AddActor(actor);
+}
+
+void DrawPoly_Line(vtkRenderer* renderer, vtkPoints* points) {
+}
+
+void Save(QComboBox* comboBox){
+    QString shape_name = comboBox->currentText();
+    if (shape_name == "Circle") {
+        double radius = Radius_Circle;
+        //Get the color and thickness of the line
+        double* color = actor->GetProperty()->GetColor();
+        double thickness = actor->GetProperty()->GetLineWidth();
+        string color_name;
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            outputFile << "Shape\tRadius\tColor\tThickness" << std::endl;
+            outputFile << "Circle\t" << radius << "\t" << color_name << "\t" << thickness  << std::endl;
+
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    if (shape_name == "Sphere") {
+        double radius = Radius_Sphere;
+        //Get the color and thickness of the line
+        double* color = actor->GetProperty()->GetColor();
+        double thickness = actor->GetProperty()->GetLineWidth();
+        string color_name;
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            outputFile << "Shape\tRadius\tColor\tThickness" << std::endl;
+            outputFile << "Sphere\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    if (shape_name == "Arc") {
+        double radius = Radius_Arc;
+        //Get the color and thickness of the line
+        double* color = actor->GetProperty()->GetColor();
+        double thickness = actor->GetProperty()->GetLineWidth();
+        string color_name;
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            outputFile << "Shape\tRadius\tColor\tThickness" << std::endl;
+            outputFile << "Arc\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    if (shape_name == "Hexahedron") {
+        //Get the color and thickness 
+        double* color = actor->GetProperty()->GetColor();
+        double thickness = actor->GetProperty()->GetLineWidth();
+        string color_name;
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            outputFile << "Shape\tColor\tThickness" << std::endl;
+            outputFile << "Hexahedron\t" << "\t" << color_name << "\t" << thickness << std::endl;
+
+            // Close the output file
+            outputFile.close();
+        }
+    }
+    if (shape_name == "Regular Polygon") {
+        double radius = Radius_Reg_Polygon;
+        int number_points = NO_POINTS;
+        //Get the color and thickness 
+        double* color = actor->GetProperty()->GetColor();
+        double thickness = actor->GetProperty()->GetLineWidth();
+        string color_name;
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+
+        // If the user didn't cancel the file dialog, write to the output file
+        if (!filename.isEmpty()) {
+            // Open the output file for writing
+            std::ofstream outputFile(filename.toStdString());
+
+            outputFile << "Shape\t\t\tRadius\tNumber of points\tColor\tThickness" << std::endl;
+            outputFile << "Regular Polygon\t" << "\t" << radius << "\t" << number_points << "\t\t\t" << color_name << "\t" << thickness << std::endl;
+
+            // Close the output file
+            outputFile.close();
+        }
+    }
+}
+
+void ChangeColor(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
+    QString color_name = comboBox->currentText();
+    if (color_name == "Red")
+    {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color_name == "Green")
+    {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color_name == "Blue")
+    {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color_name == "Yellow")
+    {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color_name == "Magenta")
+    {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color_name == "Black")
+    {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color_name == "White")
+    {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    window->Render();
+}
+
+void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window) {
+    actor->GetProperty()->SetLineWidth(thickness);
+    actor->GetMapper()->Update();
+    window->Render();
+}
 
 void Change_Shapes(QComboBox* comboBox,
     vtkGenericOpenGLRenderWindow* window)
 {
-    // Remove any existing actors from the renderer
-    //renderer->RemoveAllViewProps();
-
     QString shape_name = comboBox->currentText();
 
     if (shape_name == "Circle")
     {
-        Draw_circle();
+        bool ok;
+        Radius_Circle = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the circle:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_circle(Radius_Circle);
     }
     else if (shape_name == "Sphere") {
-        Draw_Football();
+        bool ok;
+        Radius_Sphere = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Sphere:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Football(Radius_Sphere);
     }
     else if (shape_name == "Arc")
     {
-        Draw_Arc();
+        bool ok;
+        Radius_Arc = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Arc(Radius_Arc);
     }
     else if (shape_name == "Hexahedron")
     {
-        //bool ok;
-        //// Get the center of the circle from the user using a QInputDialog
-        //double len = QInputDialog::getDouble(nullptr, "Enter the length", "Enter the length of the each side of the Arc:", 0.0, -100.0, 100.0, 2, &ok);
-        //if (!ok) {
-        //    return;
-        //}
-        //QMessageBox messageBox;
-        //messageBox.setText("Choose Region Type");
-        //QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("Filled"), QMessageBox::YesRole);
-        //QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("Non-Filled"), QMessageBox::YesRole);
-        //messageBox.exec();
-        //QString buttonText = messageBox.clickedButton()->text();
-        //std::string mode = buttonText.toStdString();
-        //Draw_Hexahedron("Red", 1.0, mode, len);
+        Draw_Hexahedron();
     }
     else if (shape_name == "Line")
     {
-        //Draw_Line();
+        Poly_Line = false;
+        vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+        renderWindowInteractor->SetRenderWindow(window);
+        // Set the custom interactor style
+        vtkNew<MouseInteractorStyleDrawLine> style;
+        style->SetRenderer(renderer);
+
+        renderWindowInteractor->SetInteractorStyle(style.Get());
+        /*window->Render();
+        renderWindowInteractor->Initialize();
+        renderWindowInteractor->Start();*/
+    }
+    else if (shape_name == "Polyline") {
     }
     else if (shape_name == "Cone") {
         Draw_Cone();
     }
     else if (shape_name == "Regular Polygon")
     {
-        Draw_Regular_Polygon();
+        bool ok;
+        Radius_Reg_Polygon = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Regular Polygon:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        NO_POINTS = QInputDialog::getDouble(nullptr, "Enter Number of sides", "Enter number of sides of the Regular Polygon:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Regular_Polygon(Radius_Reg_Polygon, NO_POINTS);
     }
     else if (shape_name == "Cylinder") {
         Draw_Cylinder();
@@ -527,29 +971,12 @@ void Change_Shapes(QComboBox* comboBox,
         Draw_Ellipse();
     }
     else if (shape_name == "Triangle Strip") {
-        //bool ok;
-        //// Get the center of the circle from the user using a QInputDialog
-        //double len = QInputDialog::getDouble(nullptr, "Enter the length", "Enter the length of the each side of the Triangle Strip:", 0.0, -100.0, 100.0, 2, &ok);
-        //if (!ok) {
-        //    return;
-        //}
-        //Draw_TriangleStrip("Red", 1.0, len);
     }
     else if (shape_name == "Text") {
-        //// Prompt user for text and font size
-        //QString text = QInputDialog::getText(nullptr, "Text Input", "Enter text:");
-        //bool ok;
-        //int fontSize = QInputDialog::getInt(nullptr, "Font Size Input", "Enter font size:", 24, 1, 100, 1, &ok);
-        //if (!ok) return; // User cancelled input dialog
-        //Draw_Text(text, fontSize, "Red");
     }
     else if (shape_name == "Square") {
         Draw_Square();
     }
-    // Reset the camera and render the window
-    //window->Render();
     window->Render();
-    // 
-    //renderer->ResetCamera();
 }
 } // namespace
