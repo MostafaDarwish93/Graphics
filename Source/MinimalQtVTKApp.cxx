@@ -94,7 +94,7 @@ namespace {
                 {
                     DrawLine(renderer, this->Points, this->Color);
                 }
-                else if (this->Points->GetNumberOfPoints() > 2 && this->Polyflag == true) {
+                else if (this->Points->GetNumberOfPoints() > 2 && this->Polyflag == true && this->Points->GetNumberOfPoints() <= 3) {
                     vtkSmartPointer<vtkActor> PolyLineActor = actor;
                     vtkDataSetMapper* PolyLineMapper = mapper;
                     vtkSmartPointer<vtkLineSource> PolyLineSource = lineSource;
@@ -127,6 +127,12 @@ namespace {
         }
         void setPolyFlag(bool f) {
             Polyflag = f;
+        }
+        void SetPoints(vtkSmartPointer<vtkPoints> Points) {
+            this->Points = Points;
+        }
+        vtkSmartPointer<vtkPoints> GetPoints() {
+            return Points;
         }
 
     private:
@@ -189,15 +195,20 @@ namespace {
     
     void DrawPolyLine(vtkSmartPointer<vtkActor> Poly_Line_Actor, vtkDataSetMapper* Poly_Line_mapper, vtkSmartPointer<vtkLineSource> Poly_Line_Source, vtkSmartPointer<vtkRenderer> Poly_Line_renderer, vtkSmartPointer<vtkPoints> points) {
         
-        Poly_Line_Source->SetPoints(points);
-        Poly_Line_mapper->SetInputConnection(Poly_Line_Source->GetOutputPort());
-        Poly_Line_mapper->Update();
-        Poly_Line_Actor->SetMapper(Poly_Line_mapper);
-        Poly_Line_Actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
-        Poly_Line_Actor->GetProperty()->SetLineWidth(3.0);
+        lineSource->SetPoints(points);
+        mapper->SetInputConnection(Poly_Line_Source->GetOutputPort());
+        mapper->Update();
+        actor->SetMapper(Poly_Line_mapper);
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        actor->GetProperty()->SetLineWidth(3.0);
 
         // Add the actor to the scene
-        Poly_Line_renderer->AddActor(Poly_Line_Actor);
+        renderer->AddActor(actor);
+
+       // Poly_Line_Source->Delete();
+       // Poly_Line_mapper->Delete();
+        //Poly_Line_Actor->Delete();
+        //Poly_Line_renderer->Delete();
         
     }
     void Draw_circle(vtkSmartPointer<vtkActor> actor, vtkDataSetMapper* mapper, vtkSmartPointer<vtkLineSource> lineSource, vtkSmartPointer<vtkRenderer> renderer)
@@ -478,6 +489,7 @@ namespace {
             //vtkNew<vtkRenderer> Circlerenderer = renderer;
             style->setFlag(false);
             style->setPolyFlag(false);
+            //style->GetPoints() = NULL;
             /// Actor, Source, Mapper
             vtkSmartPointer<vtkActor> Circleactor = actor;
             vtkDataSetMapper* Circlemapper = mapper;
@@ -751,3 +763,4 @@ int main(int argc, char* argv[])
 
     return app.exec();
 }
+
