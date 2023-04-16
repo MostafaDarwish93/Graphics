@@ -57,7 +57,7 @@ namespace {
     void Randomize(vtkSphereSource* sphere, vtkMapper* mapper,
         vtkGenericOpenGLRenderWindow* window, std::mt19937& randEng);
    // void DrawLine(vtkRenderer* renderer, int startX, int startY, int endX, int endY);
-    void DrawLine(vtkRenderer* renderer, vtkPoints* points, vtkNamedColors* colors,bool clear = false);
+    void DrawLine(vtkRenderer* renderer, vtkPoints* points, vtkNamedColors* colors);
     void DrawPolyLine(vtkSmartPointer<vtkActor> Poly_Line_Actor, vtkDataSetMapper* Poly_Line_mapper, vtkSmartPointer<vtkLineSource> Poly_Line_Source, vtkSmartPointer<vtkRenderer> Poly_Line_renderer, vtkSmartPointer<vtkPoints> points);
     void Change_Shapes(QComboBox* comboBox,
         vtkGenericOpenGLRenderWindow* window);
@@ -82,26 +82,28 @@ namespace {
 
         virtual void OnLeftButtonDown() override
         {
-            this->Picker->Pick(this->Interactor->GetEventPosition()[0], this->Interactor->GetEventPosition()[1], 0, this->Renderer);
-            double point[3];
-            this->Picker->GetPickPosition(point);
-            std::cout << "Point: " << point[0] << ", " << point[1] << ", " << point[2] << std::endl;
-            this->Points->InsertNextPoint(point);
+            if (this->flag == true || this->Polyflag == true) {
+                this->Picker->Pick(this->Interactor->GetEventPosition()[0], this->Interactor->GetEventPosition()[1], 0, this->Renderer);
+                double point[3];
+                this->Picker->GetPickPosition(point);
+                std::cout << "Point: " << point[0] << ", " << point[1] << ", " << point[2] << std::endl;
+                this->Points->InsertNextPoint(point);
 
-            // Draw the line
-            if (this->Points->GetNumberOfPoints() > 1 && this->flag==true)
-            {
-                DrawLine(renderer, this->Points, this->Color);
-            }
-            else if(this->Points->GetNumberOfPoints() > 2 && this->Polyflag == true) {
-               /* vtkSmartPointer<vtkActor> PolyLineActor = actor;
-                vtkDataSetMapper* PolyLineMapper = mapper;
-                vtkSmartPointer<vtkLineSource> PolyLineSource = lineSource;
-                vtkSmartPointer<vtkRenderer>PolyLineRenderer = renderer;
-                DrawPolyLine(PolyLineActor, PolyLineMapper, PolyLineSource, PolyLineRenderer,Points);*/
-                DrawLine(renderer, this->Points, this->Color);
-                Points->InsertNextPoint(point); // insert the first point again
-                DrawLine(renderer, this->Points, this->Color);
+                // Draw the line
+                if (this->Points->GetNumberOfPoints() > 2 && this->flag == true)
+                {
+                    DrawLine(renderer, this->Points, this->Color);
+                }
+                else if (this->Points->GetNumberOfPoints() > 2 && this->Polyflag == true) {
+                    vtkSmartPointer<vtkActor> PolyLineActor = actor;
+                    vtkDataSetMapper* PolyLineMapper = mapper;
+                    vtkSmartPointer<vtkLineSource> PolyLineSource = lineSource;
+                    vtkSmartPointer<vtkRenderer>PolyLineRenderer = renderer;
+                    DrawPolyLine(PolyLineActor, PolyLineMapper, PolyLineSource, PolyLineRenderer, Points);
+                    //DrawLine(renderer, this->Points, this->Color);
+                   // Points->InsertNextPoint(point); // insert the first point again
+                   // DrawLine(renderer, this->Points, this->Color);
+                }
             }
 
             // Forward events
@@ -290,7 +292,7 @@ namespace {
         // Add the actor to the renderer
         renderer->AddActor(actor);
     }
-    void DrawLine(vtkRenderer* Renderer, vtkPoints* points, vtkNamedColors* colors,bool clear = false) {
+    void DrawLine(vtkRenderer* Renderer, vtkPoints* points, vtkNamedColors* colors) {
 
        lineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
        lineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
@@ -749,4 +751,3 @@ int main(int argc, char* argv[])
 
     return app.exec();
 }
-
