@@ -5,7 +5,6 @@
 #include <vtkPointData.h>
 #include <vtkProperty.h>
 #include <vtkRenderer.h>
-#include <vtkSphereSource.h>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkLineSource.h>
 #include <vtkRenderWindowInteractor.h>
@@ -41,6 +40,8 @@
 #include <fstream>
 #include <iostream>
 #include <vtkTextActor.h>
+#include <vtkAppendPolyData.h>
+#include <vtkConeSource.h>
 using namespace std;
 
 vtkNew<vtkRenderer> renderer;
@@ -62,8 +63,8 @@ double MAJOR_AXIS;
 double MINOR_AXIS;
 double Radius_Hexahedron;
 double Radius_Square;
+double Radius_Star;
 bool Poly_Line = 0;
-
 
 namespace {
 void DrawLine(vtkRenderer* renderer, vtkPoints* points);
@@ -115,11 +116,9 @@ namespace {
             else {
                 DrawPoly_Line(renderer, this->Points);
             }
-
             // Forward events
             vtkInteractorStyleTrackballCamera::OnLeftButtonDown();
         }
-
         void SetRenderer(vtkRenderer* renderer)
         {
             this->Renderer = renderer;
@@ -138,7 +137,6 @@ namespace {
     };
     vtkStandardNewMacro(MouseInteractorStyleDrawLine);
 } // namespace
-
 
 int main(int argc, char* argv[])
 {
@@ -214,7 +212,7 @@ int main(int argc, char* argv[])
   shapesdroplist->addItem("Hexahedron");
   shapesdroplist->addItem("Sphere");
   shapesdroplist->addItem("Square");
-  shapesdroplist->addItem("Rosette");
+  shapesdroplist->addItem("Star");
   shapesdroplist->setCurrentIndex(0); // Set default value
   dockLayout->addWidget(shapesdroplist);
 
@@ -551,38 +549,6 @@ void Draw_Cylinder(double radius, double height, string color, int thickness) {
 
 }
 
-void Draw_Cone()
-{
-    // Set up the parameters for the cone
-    double height = 2.0;
-    double radius = 1.0;
-    int numSegments = 100; // Number of segments to create the cone
-
-    // Generate points for the cone using parametric equation
-    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
-    for (int i = 0; i <= numSegments; ++i)
-    {
-        double angle = 2.0 * vtkMath::Pi() * i / numSegments;
-        double x = radius * (1 - i / static_cast<double>(numSegments)) * std::cos(angle);
-        double y = radius * (1 - i / static_cast<double>(numSegments)) * std::sin(angle);
-        double z = height * i / static_cast<double>(numSegments);
-        points->InsertNextPoint(x, y, z);
-    }
-
-    // Set the points as the input points for the line source
-    lineSource->SetPoints(points);
-
-    // Update the mapper with the line source output
-    mapper->SetInputConnection(lineSource->GetOutputPort());
-
-    // Update the actor with the mapper and properties
-    actor->SetMapper(mapper);
-    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the cone
-
-    // Add the actor to the renderer
-    renderer->AddActor(actor);
-}
-
 void Draw_Football(double radius, string color, int thickness) {
     // Define parameters for the sphere
     double R = radius; // Radius of the sphere
@@ -783,8 +749,57 @@ void Draw_Hexahedron(double radius_hex, string color, int thickness)
     renderer->AddActor(actor);
 }
 
-void Draw_Rosette() {
+void Draw_Star(double radius, string color, int thickness) {
+    // Number of points to approximate the star
+    int numPoints = 5; // You can adjust this value to change the level of detail of the star
 
+    // Generate points for the outer and inner points of the star
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+    for (int i = 0; i <= numPoints; i++) {
+        double angleOuter = i * (2 * vtkMath::Pi() / numPoints); // Angle for outer points
+        double angleInner = angleOuter + (vtkMath::Pi() / numPoints); // Angle for inner points
+        double xOuter = radius * cos(angleOuter);
+        double yOuter = radius * sin(angleOuter);
+        double xInner = (radius / 2) * cos(angleInner);
+        double yInner = (radius / 2) * sin(angleInner);
+        points->InsertNextPoint(xOuter, yOuter, 0.0); // Insert outer points
+        points->InsertNextPoint(xInner, yInner, 0.0); // Insert inner points
+    }
+
+    // Update the line source with the generated points
+    lineSource->SetPoints(points);
+
+    // Update the mapper with the new data
+    mapper->SetInputConnection(lineSource->GetOutputPort());
+    mapper->Update();
+
+    // Update the actor with the new mapper and properties
+    actor->SetMapper(mapper);
+    if (color == "Red") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    actor->GetProperty()->SetLineWidth(thickness);
+
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
 }
 
 void DrawLine(vtkRenderer* renderer, vtkPoints* points) {
@@ -811,7 +826,6 @@ void DrawPoly_Line(vtkRenderer* renderer, vtkPoints* points) {
 void Save(QComboBox* comboBox){
     QString shape_name = comboBox->currentText();
     if (shape_name == "Circle") {
-        double radius = Radius_Circle;
         //Get the color and thickness of the line
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -855,7 +869,7 @@ void Save(QComboBox* comboBox){
                 // Open the TXT output file for writing
                 std::ofstream outputFile_txt(filename_txt.toStdString());
                 outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
-                outputFile_txt << "Circle\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt << "Circle\t" << Radius_Circle << "\t" << color_name << "\t" << thickness << std::endl;
                 outputFile_txt.close();
             }
         }
@@ -865,14 +879,13 @@ void Save(QComboBox* comboBox){
                 // Open the CSV output file for writing
                 std::ofstream outputFile_csv(filename_csv.toStdString());
                 outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
-                outputFile_csv << "Circle," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv << "Circle," << Radius_Circle << "," << color_name << "," << thickness << std::endl;
                 outputFile_csv.close();
             }
 
         }
     }
     else if (shape_name == "Sphere") {
-        double radius = Radius_Sphere;
         //Get the color and thickness of the line
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -916,7 +929,7 @@ void Save(QComboBox* comboBox){
                 // Open the TXT output file for writing
                 std::ofstream outputFile_txt(filename_txt.toStdString());
                 outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
-                outputFile_txt << "Sphere\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt << "Sphere\t" << Radius_Sphere << "\t" << color_name << "\t" << thickness << std::endl;
                 outputFile_txt.close();
             }
         }
@@ -927,13 +940,12 @@ void Save(QComboBox* comboBox){
                 // Open the CSV output file for writing
                 std::ofstream outputFile_csv(filename_csv.toStdString());
                 outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
-                outputFile_csv << "Sphere," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv << "Sphere," << Radius_Sphere << "," << color_name << "," << thickness << std::endl;
                 outputFile_csv.close();
             }
         }
     }
     else if (shape_name == "Arc") {
-        double radius = Radius_Arc;
         //Get the color and thickness of the line
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -978,7 +990,7 @@ void Save(QComboBox* comboBox){
                 // Open the TXT output file for writing
                 std::ofstream outputFile_txt(filename_txt.toStdString());
                 outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
-                outputFile_txt << "Arc\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt << "Arc\t" << Radius_Arc << "\t" << color_name << "\t" << thickness << std::endl;
                 outputFile_txt.close();
             }
         }
@@ -989,13 +1001,12 @@ void Save(QComboBox* comboBox){
                 // Open the CSV output file for writing
                 std::ofstream outputFile_csv(filename_csv.toStdString());
                 outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
-                outputFile_csv << "Arc," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv << "Arc," << Radius_Arc << "," << color_name << "," << thickness << std::endl;
                 outputFile_csv.close();
             }
         }
     }
     else if (shape_name == "Hexahedron") {
-        double radius = Radius_Hexahedron;
         //Get the color and thickness 
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -1040,7 +1051,7 @@ void Save(QComboBox* comboBox){
                 // Open the TXT output file for writing
                 std::ofstream outputFile_txt(filename_txt.toStdString());
                 outputFile_txt << "Shape\t\tRadius\tColor\tThickness" << std::endl;
-                outputFile_txt << "Hexahedron\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt << "Hexahedron\t" << Radius_Hexahedron << "\t" << color_name << "\t" << thickness << std::endl;
                 outputFile_txt.close();
             }
         }
@@ -1052,13 +1063,12 @@ void Save(QComboBox* comboBox){
                 // Open the CSV output file for writing
                 std::ofstream outputFile_csv(filename_csv.toStdString());
                 outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
-                outputFile_csv << "Hexahedron," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv << "Hexahedron," << Radius_Hexahedron << "," << color_name << "," << thickness << std::endl;
                 outputFile_csv.close();
             }
         }
     }
     else if (shape_name == "Square") {
-        double radius = Radius_Square;
         //Get the color and thickness 
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -1103,7 +1113,7 @@ void Save(QComboBox* comboBox){
                 // Open the TXT output file for writing
                 std::ofstream outputFile_txt(filename_txt.toStdString());
                 outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
-                outputFile_txt << "Square\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt << "Square\t" << Radius_Square << "\t" << color_name << "\t" << thickness << std::endl;
                 outputFile_txt.close();
             }
         }
@@ -1114,14 +1124,12 @@ void Save(QComboBox* comboBox){
                 // Open the CSV output file for writing
                 std::ofstream outputFile_csv(filename_csv.toStdString());
                 outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
-                outputFile_csv << "Square," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv << "Square," << Radius_Square << "," << color_name << "," << thickness << std::endl;
                 outputFile_csv.close();
             }
         }
     }
     else if (shape_name == "Regular Polygon") {
-        double radius = Radius_Reg_Polygon;
-        int number_points = NO_POINTS;
         //Get the color and thickness 
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -1166,7 +1174,7 @@ void Save(QComboBox* comboBox){
                 // Open the TXT output file for writing
                 std::ofstream outputFile_txt(filename_txt.toStdString());
                 outputFile_txt << "Shape\t\t\tRadius\tNumber of sides\tColor\tThickness" << std::endl;
-                outputFile_txt << "Regular_Polygon\t" << "\t" << radius << "\t" << number_points << "\t\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt << "Regular_Polygon\t" << "\t" << Radius_Reg_Polygon << "\t" << NO_POINTS << "\t\t" << color_name << "\t" << thickness << std::endl;
                 outputFile_txt.close();
             }
         }
@@ -1177,14 +1185,12 @@ void Save(QComboBox* comboBox){
                 // Open the CSV output file for writing
                 std::ofstream outputFile_csv(filename_csv.toStdString());
                 outputFile_csv << "Shape,Radius,Number of sides,Color,Thickness" << std::endl;
-                outputFile_csv << "Regular Polygon," << radius << "," << number_points << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv << "Regular Polygon," << Radius_Reg_Polygon << "," << NO_POINTS << "," << color_name << "," << thickness << std::endl;
                 outputFile_csv.close();
             }
         }
     }
     else if (shape_name == "Cylinder") {
-        double radius = Radius_Cylinder;
-        double height = Height_Cylinder;
         //Get the color and thickness of the line
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -1229,7 +1235,7 @@ void Save(QComboBox* comboBox){
                 // Open the TXT output file for writing
                 std::ofstream outputFile_txt(filename_txt.toStdString());
                 outputFile_txt << "Shape\t\tRadius\tHeight\tColor\tThickness" << std::endl;
-                outputFile_txt << "Cylinder\t" << radius << "\t" << height << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt << "Cylinder\t" << Radius_Cylinder << "\t" << Height_Cylinder << "\t" << color_name << "\t" << thickness << std::endl;
                 outputFile_txt.close();
             }
         }
@@ -1240,14 +1246,12 @@ void Save(QComboBox* comboBox){
                 // Open the CSV output file for writing
                 std::ofstream outputFile_csv(filename_csv.toStdString());
                 outputFile_csv << "Shape,Radius,Height,Color,Thickness" << std::endl;
-                outputFile_csv << "Cylinder," << radius << "," << height << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv << "Cylinder," << Radius_Cylinder << "," << Height_Cylinder << "," << color_name << "," << thickness << std::endl;
                 outputFile_csv.close();
             }
         }
     }
     else if (shape_name == "Ellipse") {
-        double x_axis = MAJOR_AXIS;
-        double y_axis = MINOR_AXIS;
         //Get the color and thickness of the line
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -1292,7 +1296,7 @@ void Save(QComboBox* comboBox){
                 // Open the TXT output file for writing
                 std::ofstream outputFile_txt(filename_txt.toStdString());
                 outputFile_txt << "Shape\tMajor Axis\tMinor Axis\tColor\tThickness" << std::endl;
-                outputFile_txt << "Ellipse\t" << x_axis << "\t\t" << y_axis << "\t\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt << "Ellipse\t" << MAJOR_AXIS << "\t\t" << MINOR_AXIS << "\t\t" << color_name << "\t" << thickness << std::endl;
                 outputFile_txt.close();
             }
         }
@@ -1303,7 +1307,68 @@ void Save(QComboBox* comboBox){
                 // Open the CSV output file for writing
                 std::ofstream outputFile_csv(filename_csv.toStdString());
                 outputFile_csv << "Shape,Major Axis,Minor Axis,Color,Thickness" << std::endl;
-                outputFile_csv << "Ellipse," << x_axis << "," << y_axis << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv << "Ellipse," << MAJOR_AXIS << "," << MINOR_AXIS << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv.close();
+            }
+        }
+    }
+    else if (shape_name == "Star") {
+        //Get the color and thickness of the line
+        double* color = actor->GetProperty()->GetColor();
+        double thickness = actor->GetProperty()->GetLineWidth();
+        string color_name;
+        // Get the name of the color based on its RGB value
+        if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Red";
+        }
+        else if (color[0] == 0.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Green";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Blue";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 0.0) {
+            color_name = "Yellow";
+        }
+        else if (color[0] == 1.0 && color[1] == 0.0 && color[2] == 1.0) {
+            color_name = "Magenta";
+        }
+        else if (color[0] == 0.0 && color[1] == 0.0 && color[2] == 0.0) {
+            color_name = "Black";
+        }
+        else if (color[0] == 1.0 && color[1] == 1.0 && color[2] == 1.0) {
+            color_name = "White";
+        }
+        else {
+            color_name = "Unknown";
+        }
+        // Ask user for TXT or CSV
+        QMessageBox messageBox;
+        messageBox.setText("Choose Save Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("TXT"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("CSV"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        if (mode == "TXT") {
+            QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_txt.isEmpty()) {
+                // Open the TXT output file for writing
+                std::ofstream outputFile_txt(filename_txt.toStdString());
+                outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
+                outputFile_txt << "Star\t" << Radius_Star << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt.close();
+            }
+        }
+        else {
+            QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_csv.isEmpty()) {
+                // Open the CSV output file for writing
+                std::ofstream outputFile_csv(filename_csv.toStdString());
+                outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
+                outputFile_csv << "Star," << Radius_Star << "," << color_name << "," << thickness << std::endl;
                 outputFile_csv.close();
             }
         }
@@ -1406,6 +1471,10 @@ void Load()
                 iss >> major_axis >> minor_axis >> color_name >> thickness;
                 Draw_Ellipse(major_axis, minor_axis, color_name, thickness);
             }
+            else if (shape == "Star") {
+                iss >> radius >> color_name >> thickness;
+                Draw_Star(radius, color_name, thickness);
+            }
             // Close the input file
             inputFile.close();
         }
@@ -1477,6 +1546,12 @@ void Load()
                     std::string color_name = fields.value(2).toStdString();
                     double thickness = fields[4].toDouble();
                     Draw_Ellipse(major_axis, minor_axis, color_name, thickness);
+                }
+                else if (shape == "Star") {
+                    double radius = fields[1].toDouble();
+                    std::string color_name = fields.value(2).toStdString();
+                    double thickness = fields[3].toDouble();
+                    Draw_Star(radius, color_name, thickness);
                 }
                 else {
                     qDebug() << "Unknown shape: " << shape;
@@ -1556,9 +1631,6 @@ void Change_Shapes(QComboBox* comboBox,
     }
     else if (shape_name == "Polyline") {
     }
-    else if (shape_name == "Cone") {
-        Draw_Cone();
-    }
     else if (shape_name == "Regular Polygon")
     {
         bool ok;
@@ -1604,9 +1676,15 @@ void Change_Shapes(QComboBox* comboBox,
         }
         Draw_Square(Radius_Square, "Red", 1.0);
     }
-    else if (shape_name == "Rosette") {
-        Draw_Rosette();
+    else if (shape_name == "Star") {
+        bool ok;
+        Radius_Star = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Star:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Star(Radius_Star, "Red", 1.0);
     }
+
     window->Render();
 }
 void Delete(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
