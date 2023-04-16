@@ -38,6 +38,9 @@
 #include <vtkPolyDataWriter.h>
 #include <vtkCoordinate.h>
 #include <sstream>
+#include <fstream>
+#include <iostream>
+#include <vtkTextActor.h>
 using namespace std;
 
 vtkNew<vtkRenderer> renderer;
@@ -75,6 +78,10 @@ void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window);
 
 void Save(QComboBox* comboBox);
 
+void Delete(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window);
+
+void Transform(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window);
+
 void Load();
 } // namespace
 
@@ -89,6 +96,7 @@ namespace {
         {
             this->Points = vtkSmartPointer<vtkPoints>::New();
             this->Picker = vtkSmartPointer<vtkPointPicker>::New();
+            this->Poly_Line = false; // Initialize Poly_Line to false
         }
 
         virtual void OnLeftButtonDown() override
@@ -99,15 +107,14 @@ namespace {
             std::cout << "Point: " << point[0] << ", " << point[1] << ", " << point[2] << std::endl;
             this->Points->InsertNextPoint(point);
 
-            // Draw the line
-            if (this->Points->GetNumberOfPoints() > 1 && Poly_Line == false)
+            // Draw the line or poly line based on Poly_Line flag
+            if (this->Points->GetNumberOfPoints() > 1 && !this->Poly_Line)
             {
                 DrawLine(renderer, this->Points);
             }
             else {
                 DrawPoly_Line(renderer, this->Points);
             }
-
 
             // Forward events
             vtkInteractorStyleTrackballCamera::OnLeftButtonDown();
@@ -118,13 +125,20 @@ namespace {
             this->Renderer = renderer;
         }
 
+        void SetPolyLine(bool polyLine)
+        {
+            this->Poly_Line = polyLine;
+        }
+
     private:
         vtkSmartPointer<vtkPoints> Points;
         vtkRenderer* Renderer;
         vtkSmartPointer<vtkPointPicker> Picker;
+        bool Poly_Line; // Flag to determine if it's a poly line or not
     };
     vtkStandardNewMacro(MouseInteractorStyleDrawLine);
 } // namespace
+
 
 int main(int argc, char* argv[])
 {
@@ -142,15 +156,12 @@ int main(int argc, char* argv[])
   QLabel controlDockTitle("Control Dock");
   controlDockTitle.setMargin(20);
   controlDock.setTitleBarWidget(&controlDockTitle);
+  renderer->SetBackground(0.5, 0.502, 0.5647); // Set the background color of the renderer
 
   QPointer<QVBoxLayout> dockLayout = new QVBoxLayout();
   QWidget layoutContainer;
   layoutContainer.setLayout(dockLayout);
   controlDock.setWidget(&layoutContainer);
-
-  QPushButton randomizeButton;
-  randomizeButton.setText("Randomize");
-  dockLayout->addWidget(&randomizeButton);
 
   // Save Button 
   QPushButton saveButton;
@@ -201,13 +212,28 @@ int main(int argc, char* argv[])
   shapesdroplist->addItem("Cone");
   shapesdroplist->addItem("Cylinder");
   shapesdroplist->addItem("Hexahedron");
-  shapesdroplist->addItem("Triangle Strip");
   shapesdroplist->addItem("Sphere");
   shapesdroplist->addItem("Square");
-  shapesdroplist->addItem("Text");
   shapesdroplist->addItem("Rosette");
   shapesdroplist->setCurrentIndex(0); // Set default value
   dockLayout->addWidget(shapesdroplist);
+
+  // Delete button
+  QPushButton* delete_button = new QPushButton("Delete");
+  dockLayout->addWidget(delete_button);
+
+  // Change color Button 
+  QPushButton* trasform_button = new QPushButton("Transform");
+  dockLayout->addWidget(trasform_button);
+
+  // Trnsform droplist
+  QComboBox* transform_list = new QComboBox();
+  transform_list->addItem("Translation");
+  transform_list->addItem("Scaling");
+  transform_list->addItem("Rotating");
+  transform_list->addItem("Shearing");
+  transform_list->setCurrentIndex(0); // Set default value
+  dockLayout->addWidget(transform_list);
 
   // render area
   QPointer<QVTKOpenGLNativeWidget> vtkRenderWidget =
@@ -248,6 +274,15 @@ int main(int argc, char* argv[])
   // Connect upload button
   QObject::connect(&uploadButton, &QPushButton::released,
       [&]() {  ::Load(); });
+
+
+  // Connect Delete Button
+  QObject::connect(delete_button, &QPushButton::clicked,
+      [=, &shapesdroplist, &window]() { Delete(shapesdroplist, window); });
+
+  // Connect Change Color 
+  QObject::connect(trasform_button, &QPushButton::clicked,
+      [=, &transform_list, &window]() { Transform(transform_list, window); });
 
   mainWindow.show();
 
@@ -614,29 +649,32 @@ void Draw_Square(double radius_square, string color, int thickness)
     double center[3] = { 0.0, 0.0, 0.0 };
 
     // Define the radius from the center to each vertex
-    double radius = 0.2;
+    double radius = radius_square;
 
-    // Define the coordinates of the four vertices of the square
-    double vertices[5][3] = { {center[0] - radius, center[1] - radius, center[2] + radius},
-                              {center[0] - radius, center[1] + radius, center[2] + radius},
-                              {center[0] + radius, center[1] + radius, center[2] + radius},
-                              {center[0] + radius, center[1] - radius, center[2] + radius},
-                              {center[0] - radius, center[1] - radius, center[2] + radius} };
+    // Calculate the coordinates of the vertices of the upper part of the hexahedron
+    double upperVertices[5][3] = { {center[0] - radius, center[1] - radius, 0},
+                                   {center[0] - radius, center[1] + radius, 0},
+                                   {center[0] + radius, center[1] + radius, 0},
+                                   {center[0] + radius, center[1] - radius, 0},
+                                   {center[0] - radius, center[1] - radius, 0} };
+
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
 
-    // Insert the vertices as points in the points array
-    for (int i = 0; i < 5; i++) // Update the loop to include the last point (to connect back to the first point)
+    // Insert the vertices of the upper part of the hexahedron as points in the points array
+    for (int i = 0; i < 5; i++)
     {
-        points->InsertNextPoint(vertices[i]);
+        points->InsertNextPoint(upperVertices[i]);
     }
 
-    // Set the points as the input points for the line source
+    // Set the points and cells as the input data for the line source
     lineSource->SetPoints(points);
+    //lineSource->SetCells(VTK_HEXAHEDRON, hexahedronCells);
 
     // Update the mapper with the line source output
     mapper->SetInputConnection(lineSource->GetOutputPort());
 
     // Update the actor with the mapper and properties
+
     actor->SetMapper(mapper);
     if (color == "Red") {
         actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
@@ -660,7 +698,6 @@ void Draw_Square(double radius_square, string color, int thickness)
         actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
     }
     actor->GetProperty()->SetLineWidth(thickness);
-
     // Add the actor to the renderer
     renderer->AddActor(actor);
 }
@@ -747,20 +784,9 @@ void Draw_Hexahedron(double radius_hex, string color, int thickness)
 }
 
 void Draw_Rosette() {
-    //// Create the line source for the rosette
-    //lineSource->SetPoint1(0.0, 0.0, 0.0); // Start point
-    //lineSource->SetPoint2(1.0, 0.0, 0.0); // End point
-    //lineSource->SetResolution(100); // Number of segments
 
-    //// Create the mapper and actor
-    //mapper->SetInputConnection(lineSource->GetOutputPort());
-    //actor->SetMapper(mapper);
-    //actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color to red
-    //actor->GetProperty()->SetLineWidth(2.0); // Set line width
-
-    //// Add the actor to the renderer
-    //renderer->AddActor(actor);
 }
+
 void DrawLine(vtkRenderer* renderer, vtkPoints* points) {
 
     lineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
@@ -1319,68 +1345,154 @@ void ChangeColor(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
 
 void Load()
 {
-    QString filename = QFileDialog::getOpenFileName(nullptr, "Open File", "", "Text files (*.txt)");
+    QString filename = QFileDialog::getOpenFileName(nullptr, "Open File", "", "Text files (*.txt);;CSV files (*.csv)");
 
     if (!filename.isEmpty()) {
-        // Open the input file for reading
-        std::ifstream inputFile(filename.toStdString());
-        if (!inputFile.is_open()) {
-            std::cout << "Error opening file " << filename.toStdString() << std::endl;
+        // Check file extension
+        QString fileExtension = QFileInfo(filename).suffix();
+        if (fileExtension == "txt") {
+            // Open the input file for reading
+            std::ifstream inputFile(filename.toStdString());
+            if (!inputFile.is_open()) {
+                std::cout << "Error opening file " << filename.toStdString() << std::endl;
+                return;
+            }
+
+            // Read the first line (header)
+            std::string line;
+            std::getline(inputFile, line);
+
+            // Read the second line (data)
+            std::getline(inputFile, line);
+            std::istringstream iss(line);
+            std::string shape;
+            double radius;
+            double cylinder_height;
+            double major_axis;
+            double minor_axis;
+            int no_of_sides;
+            std::string color_name;
+            double thickness;
+            iss >> shape;
+            if (shape == "Circle") {
+                iss >> radius >> color_name >> thickness;
+                Draw_circle(radius, color_name, thickness);
+            }
+            else if (shape == "Sphere") {
+                iss >> radius >> color_name >> thickness;
+                Draw_Football(radius, color_name, thickness);
+            }
+            else if (shape == "Arc") {
+                iss >> radius >> color_name >> thickness;
+                Draw_Arc(radius, color_name, thickness);
+            }
+            else if (shape == "Hexahedron") {
+                iss >> radius >> color_name >> thickness;
+                Draw_Hexahedron(radius, color_name, thickness);
+            }
+            else if (shape == "Regular_Polygon") {
+                iss >> radius >> no_of_sides >> color_name >> thickness;
+                Draw_Regular_Polygon(radius, no_of_sides, color_name, thickness);
+            }
+            else if (shape == "Square") {
+                iss >> radius >> color_name >> thickness;
+                Draw_Square(radius, color_name, thickness);
+            }
+            else if (shape == "Cylinder") {
+                iss >> radius >> cylinder_height >> color_name >> thickness;
+                Draw_Cylinder(radius, cylinder_height, color_name, thickness);
+            }
+            else if (shape == "Ellipse") {
+                iss >> major_axis >> minor_axis >> color_name >> thickness;
+                Draw_Ellipse(major_axis, minor_axis, color_name, thickness);
+            }
+            // Close the input file
+            inputFile.close();
+        }
+        else if (fileExtension == "csv") {
+            // Open the input file for reading
+            QFile file(filename);
+            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                qDebug() << "Failed to open the file";
+                return;
+            }
+
+            QTextStream in(&file);
+            while (!in.atEnd()) {
+                QString line = in.readLine();
+                QStringList fields = line.split(","); // assuming comma as the delimiter
+                if (fields.size() < 2) {
+                    qDebug() << "Invalid CSV line: " << line;
+                    continue;
+                }
+
+                QString shape = fields[0];
+                if (shape == "Circle") {
+                    double radius = fields[1].toDouble();
+                    std::string color_name = fields.value(2).toStdString();
+                    double thickness = fields[3].toDouble();
+                    Draw_circle(radius, color_name, thickness);
+                }
+                else if (shape == "Sphere") {
+                    double radius = fields[1].toDouble();
+                    std::string color_name = fields.value(2).toStdString();
+                    double thickness = fields[3].toDouble();
+                    Draw_Football(radius, color_name, thickness);
+                }
+                else if (shape == "Arc") {
+                    double radius = fields[1].toDouble();
+                    std::string color_name = fields.value(2).toStdString();
+                    double thickness = fields[3].toDouble();
+                    Draw_Arc(radius, color_name, thickness);
+                }
+                else if (shape == "Hexahedron") {
+                    double radius = fields[1].toDouble();
+                    std::string color_name = fields.value(2).toStdString();
+                    double thickness = fields[3].toDouble();
+                    Draw_Hexahedron(radius, color_name, thickness);
+                }
+                else if (shape == "Regular_Polygon") {
+                    double radius = fields[1].toDouble();
+                    int no_of_sides = fields[2].toInt();
+                    std::string color_name = fields.value(2).toStdString();
+                    double thickness = fields[4].toDouble();
+                    Draw_Regular_Polygon(radius, no_of_sides, color_name, thickness);
+                }
+                else if (shape == "Square") {
+                    double radius = fields[1].toDouble();
+                    std::string color_name = fields.value(2).toStdString();
+                    double thickness = fields[3].toDouble();
+                    Draw_Square(radius, color_name, thickness);
+                }
+                else if (shape == "Cylinder") {
+                    double radius = fields[1].toDouble();
+                    double cylinder_height = fields[2].toDouble();
+                    std::string color_name = fields.value(2).toStdString();
+                    double thickness = fields[4].toDouble();
+                    Draw_Cylinder(radius, cylinder_height, color_name, thickness);
+                }
+                else if (shape == "Ellipse") {
+                    double major_axis = fields[1].toDouble();
+                    double minor_axis = fields[2].toDouble();
+                    std::string color_name = fields.value(2).toStdString();
+                    double thickness = fields[4].toDouble();
+                    Draw_Ellipse(major_axis, minor_axis, color_name, thickness);
+                }
+                else {
+                    qDebug() << "Unknown shape: " << shape;
+                }
+            }
+
+            file.close();
+        }
+        else {
+            // Unsupported file type
+            std::cout << "Error: Unsupported file type" << std::endl;
             return;
         }
-
-        // Read the first line (header)
-        std::string line;
-        std::getline(inputFile, line);
-
-        // Read the second line (data)
-        std::getline(inputFile, line);
-        std::istringstream iss(line);
-        std::string shape;
-        double radius;
-        double cylinder_height;
-        double major_axis;
-        double minor_axis;
-        int no_of_sides;
-        std::string color_name;
-        double thickness;
-        iss >> shape;
-        if (shape == "Circle") {
-            iss >> radius >> color_name >> thickness;
-            Draw_circle(radius, color_name, thickness);
-        }
-        else if (shape == "Sphere") {
-            iss >> radius >> color_name >> thickness;
-            Draw_Football(radius, color_name, thickness);
-        }
-        else if (shape == "Arc") {
-            iss >> radius >> color_name >> thickness;
-            Draw_Arc(radius, color_name, thickness);
-        }
-        else if (shape == "Hexahedron") {
-            iss >> radius >> color_name >> thickness;
-            Draw_Hexahedron(radius, color_name, thickness);
-        }
-        else if (shape == "Regular_Polygon") {
-            iss >> radius >> no_of_sides >> color_name >> thickness;
-            Draw_Regular_Polygon(radius, no_of_sides, color_name, thickness);
-        }
-        else if (shape == "Square") {
-            iss >> radius >> color_name >> thickness;
-            Draw_Square(radius, color_name, thickness);
-        }
-        else if (shape == "Cylinder") {
-            iss >> radius >> cylinder_height >> color_name >> thickness;
-            Draw_Cylinder(radius, cylinder_height, color_name, thickness);
-        }
-        else if (shape == "Ellipse") {
-            iss >> major_axis >> minor_axis >> color_name >> thickness;
-            Draw_Ellipse(major_axis, minor_axis, color_name, thickness);
-        }
-        // Close the input file
-        inputFile.close();
     }
 }
+
 
 void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window) {
     actor->GetProperty()->SetLineWidth(thickness);
@@ -1484,10 +1596,6 @@ void Change_Shapes(QComboBox* comboBox,
         }
         Draw_Ellipse(MAJOR_AXIS, MINOR_AXIS, "Red", 1.0);
     }
-    else if (shape_name == "Triangle Strip") {
-    }
-    else if (shape_name == "Text") {
-    }
     else if (shape_name == "Square") {
         bool ok;
         Radius_Square = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Square:", 0.0, -100.0, 100.0, 2, &ok);
@@ -1500,5 +1608,19 @@ void Change_Shapes(QComboBox* comboBox,
         Draw_Rosette();
     }
     window->Render();
+}
+void Delete(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
+    // Set the color of the shape to match the background color
+    actor->GetProperty()->SetColor(renderer->GetBackground());
+    // Remove points from the line source
+    vtkSmartPointer<vtkPoints> emptyPoints = vtkSmartPointer<vtkPoints>::New();
+    lineSource->SetPoints(emptyPoints);
+    window->Render(); // Render the window to reflect the changes
+}
+void Transform(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
+    QString tranform_state = comboBox->currentText();
+    if (tranform_state == "Translation") {
+
+    }
 }
 } // namespace
