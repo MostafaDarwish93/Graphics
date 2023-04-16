@@ -37,6 +37,7 @@
 #include <vtkPolyDataMapper.h>
 #include <vtkPolyDataWriter.h>
 #include <vtkCoordinate.h>
+#include <sstream>
 using namespace std;
 
 vtkNew<vtkRenderer> renderer;
@@ -56,13 +57,12 @@ double Radius_Cylinder;
 double Height_Cylinder;
 double MAJOR_AXIS;
 double MINOR_AXIS;
+double Radius_Hexahedron;
+double Radius_Square;
 bool Poly_Line = 0;
 
 
 namespace {
-void Randomize(vtkSphereSource* sphere, vtkMapper* mapper,
-               vtkGenericOpenGLRenderWindow* window, std::mt19937& randEng);
-
 void DrawLine(vtkRenderer* renderer, vtkPoints* points);
 
 void DrawPoly_Line(vtkRenderer* renderer, vtkPoints* points);
@@ -74,6 +74,8 @@ void ChangeColor(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window);
 void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window);
 
 void Save(QComboBox* comboBox);
+
+void Load();
 } // namespace
 
 namespace {
@@ -157,7 +159,7 @@ int main(int argc, char* argv[])
 
   // Upload Button 
   QPushButton uploadButton;
-  uploadButton.setText("Upload");
+  uploadButton.setText("Load");
   dockLayout->addWidget(&uploadButton);
 
   // Change color Button 
@@ -203,6 +205,7 @@ int main(int argc, char* argv[])
   shapesdroplist->addItem("Sphere");
   shapesdroplist->addItem("Square");
   shapesdroplist->addItem("Text");
+  shapesdroplist->addItem("Rosette");
   shapesdroplist->setCurrentIndex(0); // Set default value
   dockLayout->addWidget(shapesdroplist);
 
@@ -215,30 +218,14 @@ int main(int argc, char* argv[])
   vtkNew<vtkGenericOpenGLRenderWindow> window;
   vtkRenderWidget->setRenderWindow(window.Get());
 
-  vtkNew<vtkSphereSource> sphere;
-  sphere->SetRadius(1.0);
-  sphere->SetThetaResolution(100);
-  sphere->SetPhiResolution(100);
-
-  mapper->SetInputConnection(sphere->GetOutputPort());
-
   vtkNew<vtkActor> actor;
   actor->SetMapper(mapper);
   actor->GetProperty()->SetEdgeVisibility(true);
   actor->GetProperty()->SetRepresentationToSurface();
 
-  //vtkNew<vtkRenderer> renderer;
   renderer->AddActor(actor);
 
   window->AddRenderer(renderer);
-
-  // setup initial status
-  std::mt19937 randEng(0);
-  ::Randomize(sphere, mapper, window, randEng);
-
-  // connect the buttons
-  QObject::connect(&randomizeButton, &QPushButton::released,
-                   [&]() { ::Randomize(sphere, mapper, window, randEng); });
 
   // Use a lambda function with capture by reference
   QObject::connect(changeshapes, &QPushButton::clicked,
@@ -258,57 +245,17 @@ int main(int argc, char* argv[])
   QObject::connect(&saveButton, &QPushButton::released,
       [&]() {  ::Save(shapesdroplist); });
 
+  // Connect upload button
+  QObject::connect(&uploadButton, &QPushButton::released,
+      [&]() {  ::Load(); });
+
   mainWindow.show();
 
   return app.exec();
 }
 
 namespace {
-void Randomize(vtkSphereSource* sphere, vtkMapper* mapper,
-               vtkGenericOpenGLRenderWindow* window, std::mt19937& randEng)
-{
-  // generate randomness
-  double randAmp = 0.2 + ((randEng() % 1000) / 1000.0) * 0.2;
-  double randThetaFreq = 1.0 + (randEng() % 9);
-  double randPhiFreq = 1.0 + (randEng() % 9);
-
-  // extract and prepare data
-  sphere->Update();
-  vtkSmartPointer<vtkPolyData> newSphere;
-  newSphere.TakeReference(sphere->GetOutput()->NewInstance());
-  newSphere->DeepCopy(sphere->GetOutput());
-  vtkNew<vtkDoubleArray> height;
-  height->SetName("Height");
-  height->SetNumberOfComponents(1);
-  height->SetNumberOfTuples(newSphere->GetNumberOfPoints());
-  newSphere->GetPointData()->AddArray(height);
-
-  // deform the sphere
-  for (int iP = 0; iP < newSphere->GetNumberOfPoints(); iP++)
-  {
-    double pt[3] = {0.0};
-    newSphere->GetPoint(iP, pt);
-    double theta = std::atan2(pt[1], pt[0]);
-    double phi =
-        std::atan2(pt[2], std::sqrt(std::pow(pt[0], 2) + std::pow(pt[1], 2)));
-    double thisAmp =
-        randAmp * std::cos(randThetaFreq * theta) * std::sin(randPhiFreq * phi);
-    height->SetValue(iP, thisAmp);
-    pt[0] += thisAmp * std::cos(theta) * std::cos(phi);
-    pt[1] += thisAmp * std::sin(theta) * std::cos(phi);
-    pt[2] += thisAmp * std::sin(phi);
-    newSphere->GetPoints()->SetPoint(iP, pt);
-  }
-  newSphere->GetPointData()->SetScalars(height);
-
-  // reconfigure the pipeline to take the new deformed sphere
-  mapper->SetInputDataObject(newSphere);
-  mapper->SetScalarModeToUsePointData();
-  mapper->ColorByArrayComponent("Height", 0);
-  window->Render();
-}
-
-void Draw_circle(double radius)
+void Draw_circle(double radius, string color, int thickness)
 {
     double R = radius; // Radius of the circle
     int numPoints = 100; // Number of points to approximate the circle
@@ -332,14 +279,34 @@ void Draw_circle(double radius)
 
     // Update the actor with the new mapper and properties based on user's choice
     actor->SetMapper(mapper);
-    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the circle
-    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the circle
+    if (color == "Red") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    actor->GetProperty()->SetLineWidth(thickness);
 
     // Add the actor to the renderer
     renderer->AddActor(actor);
 }
 
-void Draw_Ellipse(double x_axis, double y_axis) {
+void Draw_Ellipse(double x_axis, double y_axis, string color, int thickness) {
     // Create an ellipse using parametric equations
     double A = x_axis; // Major axis length
     double B = y_axis; // Minor axis length
@@ -359,15 +326,35 @@ void Draw_Ellipse(double x_axis, double y_axis) {
     mapper->SetInputConnection(lineSource->GetOutputPort());
 
     actor->SetMapper(mapper);
-    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the ellipse
-    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the ellipse
+    if (color == "Red") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    actor->GetProperty()->SetLineWidth(thickness);
 
     // Add the actor to the renderer
     renderer->AddActor(actor);
 
 }
 
-void Draw_Regular_Polygon(double radius, int no_points) {
+void Draw_Regular_Polygon(double radius, int no_points, string color, int thickness) {
     // Define parameters for the regular polygon
     double R = radius; // Radius of the regular polygon
     int numPoints = no_points; // Number of points to approximate the regular polygon
@@ -392,14 +379,34 @@ void Draw_Regular_Polygon(double radius, int no_points) {
 
     // Update the actor with the mapper and properties
     actor->SetMapper(mapper);
-    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the regular polygon
-    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the regular polygon
+    if (color == "Red") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    actor->GetProperty()->SetLineWidth(thickness);
 
     // Add the actor to the renderer
     renderer->AddActor(actor);
 }
 
-void Draw_Arc(double radius) {
+void Draw_Arc(double radius, string color, int thickness) {
     // Define parameters for the arc
     double R = radius; // Radius of the arc
     double startAngle = 1.0; // Start angle of the arc in radians
@@ -426,15 +433,35 @@ void Draw_Arc(double radius) {
 
     // Update the actor with the mapper and properties
     actor->SetMapper(mapper);
-    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the arc
-    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the arc
+    if (color == "Red") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    actor->GetProperty()->SetLineWidth(thickness);
 
     // Add the actor to the renderer
     renderer->AddActor(actor);
 
 }
 
-void Draw_Cylinder(double radius, double height) {
+void Draw_Cylinder(double radius, double height, string color, int thickness) {
     // Define parameters for the cylinder
     double R = radius; // Radius of the cylinder
     double H = height; // Height of the cylinder
@@ -461,8 +488,28 @@ void Draw_Cylinder(double radius, double height) {
 
     // Update the actor with the mapper and properties
     actor->SetMapper(mapper);
-    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the cylinder
-    actor->GetProperty()->SetLineWidth(2.0); // Set line width of the cylinder
+    if (color == "Red") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    actor->GetProperty()->SetLineWidth(thickness);
 
     // Add the actor to the renderer
     renderer->AddActor(actor);
@@ -481,9 +528,9 @@ void Draw_Cone()
     for (int i = 0; i <= numSegments; ++i)
     {
         double angle = 2.0 * vtkMath::Pi() * i / numSegments;
-        double x = radius * std::cos(angle);
-        double y = radius * std::sin(angle);
-        double z = height * i / numSegments;
+        double x = radius * (1 - i / static_cast<double>(numSegments)) * std::cos(angle);
+        double y = radius * (1 - i / static_cast<double>(numSegments)) * std::sin(angle);
+        double z = height * i / static_cast<double>(numSegments);
         points->InsertNextPoint(x, y, z);
     }
 
@@ -496,9 +543,12 @@ void Draw_Cone()
     // Update the actor with the mapper and properties
     actor->SetMapper(mapper);
     actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the cone
+
+    // Add the actor to the renderer
+    renderer->AddActor(actor);
 }
 
-void Draw_Football(double radius) {
+void Draw_Football(double radius, string color, int thickness) {
     // Define parameters for the sphere
     double R = radius; // Radius of the sphere
     int numPointsTheta = 100; // Number of points in theta direction
@@ -530,18 +580,48 @@ void Draw_Football(double radius) {
 
     // Update the actor with the mapper and properties
     actor->SetMapper(mapper);
-    actor->GetProperty()->SetColor(0.0, 1.0, 0.0); // Set color of the sphere
+    if (color == "Red") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    actor->GetProperty()->SetLineWidth(thickness);
 
     // Add the actor to the renderer
     renderer->AddActor(actor);
 
 }
 
-void Draw_Square()
+void Draw_Square(double radius_square, string color, int thickness)
 {
-    // Define the coordinates of the four vertices of the square
-    double vertices[5][3] = { {-1.0, -1.0, 0.0}, {-1.0, 1.0, 0.0}, {1.0, 1.0, 0.0}, {1.0, -1.0, 0.0}, {-1.0, -1.0, 0.0} };
+    // Define the center point of the hexahedron
+    double center[3] = { 0.0, 0.0, 0.0 };
 
+    // Define the radius from the center to each vertex
+    double radius = 0.2;
+
+    // Define the coordinates of the four vertices of the square
+    double vertices[5][3] = { {center[0] - radius, center[1] - radius, center[2] + radius},
+                              {center[0] - radius, center[1] + radius, center[2] + radius},
+                              {center[0] + radius, center[1] + radius, center[2] + radius},
+                              {center[0] + radius, center[1] - radius, center[2] + radius},
+                              {center[0] - radius, center[1] - radius, center[2] + radius} };
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
 
     // Insert the vertices as points in the points array
@@ -558,21 +638,54 @@ void Draw_Square()
 
     // Update the actor with the mapper and properties
     actor->SetMapper(mapper);
-    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the square
+    if (color == "Red") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    actor->GetProperty()->SetLineWidth(thickness);
 
     // Add the actor to the renderer
     renderer->AddActor(actor);
 }
 
-void Draw_Hexahedron()
+void Draw_Hexahedron(double radius_hex, string color, int thickness)
 {
-    // Define the coordinates of the vertices of the upper part of the hexahedron
-    double upperVertices[5][3] = { {-1.0, -1.0, 1.0}, {-1.0, 1.0, 1.0}, {1.0, 1.0, 1.0}, {1.0, -1.0, 1.0},
-                                    {-1.0, -1.0, 1.0}};
+    // Define the center point of the hexahedron
+    double center[3] = { 0.0, 0.0, 0.0 };
+
+    // Define the radius from the center to each vertex
+    double radius = radius_hex;
+
+    // Calculate the coordinates of the vertices of the upper part of the hexahedron
+    double upperVertices[5][3] = { {center[0] - radius, center[1] - radius, center[2] + radius},
+                                   {center[0] - radius, center[1] + radius, center[2] + radius},
+                                   {center[0] + radius, center[1] + radius, center[2] + radius},
+                                   {center[0] + radius, center[1] - radius, center[2] + radius},
+                                   {center[0] - radius, center[1] - radius, center[2] + radius} };
 
     // Define the coordinates of the vertices of the lower part of the hexahedron
-    double lowerVertices[5][3] = { {-1.0, -1.0, -1.0}, {-1.0, 1.0, -1.0}, {1.0, 1.0, -1.0}, {1.0, -1.0, -1.0},
-                                    {-1.0, -1.0, -1.0} };
+    double lowerVertices[5][3] = { {center[0] - radius, center[1] - radius, center[2] - radius},
+                                   {center[0] - radius, center[1] + radius, center[2] - radius},
+                                   {center[0] + radius, center[1] + radius, center[2] - radius},
+                                   {center[0] + radius, center[1] - radius, center[2] - radius},
+                                   {center[0] - radius, center[1] - radius, center[2] - radius} };
 
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
 
@@ -607,12 +720,47 @@ void Draw_Hexahedron()
     // Update the actor with the mapper and properties
 
     actor->SetMapper(mapper);
-    actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color of the hexahedron
-
+    if (color == "Red") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+    }
+    else if (color == "Blue") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+    }
+    else if (color == "Yellow") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+    }
+    else if (color == "Green") {
+        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+    }
+    else if (color == "Magenta") {
+        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+    }
+    else if (color == "Black") {
+        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+    }
+    else if (color == "White") {
+        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+    }
+    actor->GetProperty()->SetLineWidth(thickness);
     // Add the actor to the renderer
     renderer->AddActor(actor);
 }
 
+void Draw_Rosette() {
+    //// Create the line source for the rosette
+    //lineSource->SetPoint1(0.0, 0.0, 0.0); // Start point
+    //lineSource->SetPoint2(1.0, 0.0, 0.0); // End point
+    //lineSource->SetResolution(100); // Number of segments
+
+    //// Create the mapper and actor
+    //mapper->SetInputConnection(lineSource->GetOutputPort());
+    //actor->SetMapper(mapper);
+    //actor->GetProperty()->SetColor(1.0, 0.0, 0.0); // Set color to red
+    //actor->GetProperty()->SetLineWidth(2.0); // Set line width
+
+    //// Add the actor to the renderer
+    //renderer->AddActor(actor);
+}
 void DrawLine(vtkRenderer* renderer, vtkPoints* points) {
 
     lineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
@@ -667,25 +815,37 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
-        QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+        // Ask user for TXT or CSV
+        QMessageBox messageBox;
+        messageBox.setText("Choose Save Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("TXT"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("CSV"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        if (mode == "TXT") {
+            QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+            if (!filename_txt.isEmpty()) {
+                // Open the TXT output file for writing
+                std::ofstream outputFile_txt(filename_txt.toStdString());
+                outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
+                outputFile_txt << "Circle\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt.close();
+            }
+        }
+        else {
+            QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+            if (!filename_csv.isEmpty()) {
+                // Open the CSV output file for writing
+                std::ofstream outputFile_csv(filename_csv.toStdString());
+                outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
+                outputFile_csv << "Circle," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv.close();
+            }
 
-        // If the user didn't cancel the file dialogs, write to the output files
-        if (!filename_csv.isEmpty() && !filename_txt.isEmpty()) {
-            // Open the CSV output file for writing
-            std::ofstream outputFile_csv(filename_csv.toStdString());
-            outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
-            outputFile_csv << "Circle," << radius << "," << color_name << "," << thickness << std::endl;
-            outputFile_csv.close();
-
-            // Open the TXT output file for writing
-            std::ofstream outputFile_txt(filename_txt.toStdString());
-            outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
-            outputFile_txt << "Circle\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
-            outputFile_txt.close();
         }
     }
-    if (shape_name == "Sphere") {
+    else if (shape_name == "Sphere") {
         double radius = Radius_Sphere;
         //Get the color and thickness of the line
         double* color = actor->GetProperty()->GetColor();
@@ -716,25 +876,37 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
-        QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
-
-        // If the user didn't cancel the file dialogs, write to the output files
-        if (!filename_csv.isEmpty() && !filename_txt.isEmpty()) {
-            // Open the CSV output file for writing
-            std::ofstream outputFile_csv(filename_csv.toStdString());
-            outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
-            outputFile_csv << "Sphere," << radius << "," << color_name << "," << thickness << std::endl;
-            outputFile_csv.close();
-
-            // Open the TXT output file for writing
-            std::ofstream outputFile_txt(filename_txt.toStdString());
-            outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
-            outputFile_txt << "Sphere\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
-            outputFile_txt.close();
+        // Ask user for TXT or CSV
+        QMessageBox messageBox;
+        messageBox.setText("Choose Save Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("TXT"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("CSV"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        if (mode == "TXT") {
+            QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+            if (!filename_txt.isEmpty()) {
+                // Open the TXT output file for writing
+                std::ofstream outputFile_txt(filename_txt.toStdString());
+                outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
+                outputFile_txt << "Sphere\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt.close();
+            }
+        }
+        else {
+            QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_csv.isEmpty()) {
+                // Open the CSV output file for writing
+                std::ofstream outputFile_csv(filename_csv.toStdString());
+                outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
+                outputFile_csv << "Sphere," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv.close();
+            }
         }
     }
-    if (shape_name == "Arc") {
+    else if (shape_name == "Arc") {
         double radius = Radius_Arc;
         //Get the color and thickness of the line
         double* color = actor->GetProperty()->GetColor();
@@ -765,21 +937,39 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
-
-        // If the user didn't cancel the file dialog, write to the output file
-        if (!filename.isEmpty()) {
-            // Open the output file for writing
-            std::ofstream outputFile(filename.toStdString());
-
-            outputFile << "Shape\tRadius\tColor\tThickness" << std::endl;
-            outputFile << "Arc\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
-
-            // Close the output file
-            outputFile.close();
+        // Ask user for TXT or CSV
+        QMessageBox messageBox;
+        messageBox.setText("Choose Save Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("TXT"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("CSV"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        if (mode == "TXT") {
+            QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_txt.isEmpty()) {
+                // Open the TXT output file for writing
+                std::ofstream outputFile_txt(filename_txt.toStdString());
+                outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
+                outputFile_txt << "Arc\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt.close();
+            }
+        }
+        else {
+            QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_csv.isEmpty()) {
+                // Open the CSV output file for writing
+                std::ofstream outputFile_csv(filename_csv.toStdString());
+                outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
+                outputFile_csv << "Arc," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv.close();
+            }
         }
     }
-    if (shape_name == "Hexahedron") {
+    else if (shape_name == "Hexahedron") {
+        double radius = Radius_Hexahedron;
         //Get the color and thickness 
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -809,21 +999,40 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+        // Ask user for TXT or CSV
+        QMessageBox messageBox;
+        messageBox.setText("Choose Save Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("TXT"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("CSV"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        if (mode == "TXT") {
+            QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_txt.isEmpty()) {
+                // Open the TXT output file for writing
+                std::ofstream outputFile_txt(filename_txt.toStdString());
+                outputFile_txt << "Shape\t\tRadius\tColor\tThickness" << std::endl;
+                outputFile_txt << "Hexahedron\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt.close();
+            }
+        }
+        else {
+            QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
 
-        // If the user didn't cancel the file dialog, write to the output file
-        if (!filename.isEmpty()) {
-            // Open the output file for writing
-            std::ofstream outputFile(filename.toStdString());
-
-            outputFile << "Shape\tColor\tThickness" << std::endl;
-            outputFile << "Hexahedron\t" << "\t" << color_name << "\t" << thickness << std::endl;
-
-            // Close the output file
-            outputFile.close();
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_csv.isEmpty()) {
+                // Open the CSV output file for writing
+                std::ofstream outputFile_csv(filename_csv.toStdString());
+                outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
+                outputFile_csv << "Hexahedron," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv.close();
+            }
         }
     }
-    if (shape_name == "Square") {
+    else if (shape_name == "Square") {
+        double radius = Radius_Square;
         //Get the color and thickness 
         double* color = actor->GetProperty()->GetColor();
         double thickness = actor->GetProperty()->GetLineWidth();
@@ -853,21 +1062,38 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
-
-        // If the user didn't cancel the file dialog, write to the output file
-        if (!filename.isEmpty()) {
-            // Open the output file for writing
-            std::ofstream outputFile(filename.toStdString());
-
-            outputFile << "Shape\tColor\tThickness" << std::endl;
-            outputFile << "Square\t" << color_name << "\t" << thickness << std::endl;
-
-            // Close the output file
-            outputFile.close();
+        // Ask user for TXT or CSV
+        QMessageBox messageBox;
+        messageBox.setText("Choose Save Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("TXT"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("CSV"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        if (mode == "TXT") {
+            QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_txt.isEmpty()) {
+                // Open the TXT output file for writing
+                std::ofstream outputFile_txt(filename_txt.toStdString());
+                outputFile_txt << "Shape\tRadius\tColor\tThickness" << std::endl;
+                outputFile_txt << "Square\t" << radius << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt.close();
+            }
+        }
+        else {
+            QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_csv.isEmpty()) {
+                // Open the CSV output file for writing
+                std::ofstream outputFile_csv(filename_csv.toStdString());
+                outputFile_csv << "Shape,Radius,Color,Thickness" << std::endl;
+                outputFile_csv << "Square," << radius << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv.close();
+            }
         }
     }
-    if (shape_name == "Regular Polygon") {
+    else if (shape_name == "Regular Polygon") {
         double radius = Radius_Reg_Polygon;
         int number_points = NO_POINTS;
         //Get the color and thickness 
@@ -899,21 +1125,38 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
-
-        // If the user didn't cancel the file dialog, write to the output file
-        if (!filename.isEmpty()) {
-            // Open the output file for writing
-            std::ofstream outputFile(filename.toStdString());
-
-            outputFile << "Shape\t\t\tRadius\tNumber of points\tColor\tThickness" << std::endl;
-            outputFile << "Regular Polygon\t" << "\t" << radius << "\t" << number_points << "\t\t\t" << color_name << "\t" << thickness << std::endl;
-
-            // Close the output file
-            outputFile.close();
+        // Ask user for TXT or CSV
+        QMessageBox messageBox;
+        messageBox.setText("Choose Save Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("TXT"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("CSV"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        if (mode == "TXT") {
+            QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_txt.isEmpty()) {
+                // Open the TXT output file for writing
+                std::ofstream outputFile_txt(filename_txt.toStdString());
+                outputFile_txt << "Shape\t\t\tRadius\tNumber of sides\tColor\tThickness" << std::endl;
+                outputFile_txt << "Regular_Polygon\t" << "\t" << radius << "\t" << number_points << "\t\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt.close();
+            }
+        }
+        else {
+            QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_csv.isEmpty()) {
+                // Open the CSV output file for writing
+                std::ofstream outputFile_csv(filename_csv.toStdString());
+                outputFile_csv << "Shape,Radius,Number of sides,Color,Thickness" << std::endl;
+                outputFile_csv << "Regular Polygon," << radius << "," << number_points << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv.close();
+            }
         }
     }
-    if (shape_name == "Cylinder") {
+    else if (shape_name == "Cylinder") {
         double radius = Radius_Cylinder;
         double height = Height_Cylinder;
         //Get the color and thickness of the line
@@ -945,21 +1188,38 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
-
-        // If the user didn't cancel the file dialog, write to the output file
-        if (!filename.isEmpty()) {
-            // Open the output file for writing
-            std::ofstream outputFile(filename.toStdString());
-
-            outputFile << "Shape\t\tRadius\tHeight\tColor\tThickness" << std::endl;
-            outputFile << "Cylinder\t" << radius << "\t" << height << "\t" << color_name << "\t" << thickness << std::endl;
-
-            // Close the output file
-            outputFile.close();
+        // Ask user for TXT or CSV
+        QMessageBox messageBox;
+        messageBox.setText("Choose Save Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("TXT"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("CSV"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        if (mode == "TXT") {
+            QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_txt.isEmpty()) {
+                // Open the TXT output file for writing
+                std::ofstream outputFile_txt(filename_txt.toStdString());
+                outputFile_txt << "Shape\t\tRadius\tHeight\tColor\tThickness" << std::endl;
+                outputFile_txt << "Cylinder\t" << radius << "\t" << height << "\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt.close();
+            }
+        }
+        else {
+            QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_csv.isEmpty()) {
+                // Open the CSV output file for writing
+                std::ofstream outputFile_csv(filename_csv.toStdString());
+                outputFile_csv << "Shape,Radius,Height,Color,Thickness" << std::endl;
+                outputFile_csv << "Cylinder," << radius << "," << height << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv.close();
+            }
         }
     }
-    if (shape_name == "Ellipse") {
+    else if (shape_name == "Ellipse") {
         double x_axis = MAJOR_AXIS;
         double y_axis = MINOR_AXIS;
         //Get the color and thickness of the line
@@ -991,18 +1251,35 @@ void Save(QComboBox* comboBox){
         else {
             color_name = "Unknown";
         }
-        QString filename = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
-
-        // If the user didn't cancel the file dialog, write to the output file
-        if (!filename.isEmpty()) {
-            // Open the output file for writing
-            std::ofstream outputFile(filename.toStdString());
-
-            outputFile << "Shape\tMajor Axis\tMinor Axis\tColor\tThickness" << std::endl;
-            outputFile << "Ellipse\t" << x_axis << "\t\t" << y_axis << "\t\t" << color_name << "\t" << thickness << std::endl;
-
-            // Close the output file
-            outputFile.close();
+        // Ask user for TXT or CSV
+        QMessageBox messageBox;
+        messageBox.setText("Choose Save Type");
+        QAbstractButton* filledButton = messageBox.addButton(QMessageBox::tr("TXT"), QMessageBox::YesRole);
+        QAbstractButton* nonFilledButton = messageBox.addButton(QMessageBox::tr("CSV"), QMessageBox::YesRole);
+        messageBox.exec();
+        QString buttonText = messageBox.clickedButton()->text();
+        std::string mode = buttonText.toStdString();
+        if (mode == "TXT") {
+            QString filename_txt = QFileDialog::getSaveFileName(nullptr, "Save File", "", "Text files (*.txt)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_txt.isEmpty()) {
+                // Open the TXT output file for writing
+                std::ofstream outputFile_txt(filename_txt.toStdString());
+                outputFile_txt << "Shape\tMajor Axis\tMinor Axis\tColor\tThickness" << std::endl;
+                outputFile_txt << "Ellipse\t" << x_axis << "\t\t" << y_axis << "\t\t" << color_name << "\t" << thickness << std::endl;
+                outputFile_txt.close();
+            }
+        }
+        else {
+            QString filename_csv = QFileDialog::getSaveFileName(nullptr, "Save File", "", "CSV files (*.csv)");
+            // If the user didn't cancel the file dialogs, write to the output files
+            if (!filename_csv.isEmpty()) {
+                // Open the CSV output file for writing
+                std::ofstream outputFile_csv(filename_csv.toStdString());
+                outputFile_csv << "Shape,Major Axis,Minor Axis,Color,Thickness" << std::endl;
+                outputFile_csv << "Ellipse," << x_axis << "," << y_axis << "," << color_name << "," << thickness << std::endl;
+                outputFile_csv.close();
+            }
         }
     }
 }
@@ -1040,6 +1317,71 @@ void ChangeColor(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
     window->Render();
 }
 
+void Load()
+{
+    QString filename = QFileDialog::getOpenFileName(nullptr, "Open File", "", "Text files (*.txt)");
+
+    if (!filename.isEmpty()) {
+        // Open the input file for reading
+        std::ifstream inputFile(filename.toStdString());
+        if (!inputFile.is_open()) {
+            std::cout << "Error opening file " << filename.toStdString() << std::endl;
+            return;
+        }
+
+        // Read the first line (header)
+        std::string line;
+        std::getline(inputFile, line);
+
+        // Read the second line (data)
+        std::getline(inputFile, line);
+        std::istringstream iss(line);
+        std::string shape;
+        double radius;
+        double cylinder_height;
+        double major_axis;
+        double minor_axis;
+        int no_of_sides;
+        std::string color_name;
+        double thickness;
+        iss >> shape;
+        if (shape == "Circle") {
+            iss >> radius >> color_name >> thickness;
+            Draw_circle(radius, color_name, thickness);
+        }
+        else if (shape == "Sphere") {
+            iss >> radius >> color_name >> thickness;
+            Draw_Football(radius, color_name, thickness);
+        }
+        else if (shape == "Arc") {
+            iss >> radius >> color_name >> thickness;
+            Draw_Arc(radius, color_name, thickness);
+        }
+        else if (shape == "Hexahedron") {
+            iss >> radius >> color_name >> thickness;
+            Draw_Hexahedron(radius, color_name, thickness);
+        }
+        else if (shape == "Regular_Polygon") {
+            iss >> radius >> no_of_sides >> color_name >> thickness;
+            Draw_Regular_Polygon(radius, no_of_sides, color_name, thickness);
+        }
+        else if (shape == "Square") {
+            iss >> radius >> color_name >> thickness;
+            Draw_Square(radius, color_name, thickness);
+        }
+        else if (shape == "Cylinder") {
+            iss >> radius >> cylinder_height >> color_name >> thickness;
+            Draw_Cylinder(radius, cylinder_height, color_name, thickness);
+        }
+        else if (shape == "Ellipse") {
+            iss >> major_axis >> minor_axis >> color_name >> thickness;
+            Draw_Ellipse(major_axis, minor_axis, color_name, thickness);
+        }
+        // Close the input file
+        inputFile.close();
+    }
+}
+
 void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window) {
     actor->GetProperty()->SetLineWidth(thickness);
     actor->GetMapper()->Update();
@@ -1058,7 +1400,7 @@ void Change_Shapes(QComboBox* comboBox,
         if (!ok) {
             return;
         }
-        Draw_circle(Radius_Circle);
+        Draw_circle(Radius_Circle, "Red", 1.0);
     }
     else if (shape_name == "Sphere") {
         bool ok;
@@ -1066,7 +1408,7 @@ void Change_Shapes(QComboBox* comboBox,
         if (!ok) {
             return;
         }
-        Draw_Football(Radius_Sphere);
+        Draw_Football(Radius_Sphere, "Red", 1.0);
     }
     else if (shape_name == "Arc")
     {
@@ -1075,11 +1417,16 @@ void Change_Shapes(QComboBox* comboBox,
         if (!ok) {
             return;
         }
-        Draw_Arc(Radius_Arc);
+        Draw_Arc(Radius_Arc, "Red", 1.0);
     }
     else if (shape_name == "Hexahedron")
     {
-        Draw_Hexahedron();
+        bool ok;
+        Radius_Hexahedron = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Hexahedron:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Hexahedron(Radius_Hexahedron, "Red", 1.0);
     }
     else if (shape_name == "Line")
     {
@@ -1111,7 +1458,7 @@ void Change_Shapes(QComboBox* comboBox,
         if (!ok) {
             return;
         }
-        Draw_Regular_Polygon(Radius_Reg_Polygon, NO_POINTS);
+        Draw_Regular_Polygon(Radius_Reg_Polygon, NO_POINTS, "Red", 1.0);
     }
     else if (shape_name == "Cylinder") {
         bool ok;
@@ -1123,7 +1470,7 @@ void Change_Shapes(QComboBox* comboBox,
         if (!ok) {
             return;
         }
-        Draw_Cylinder(Radius_Cylinder, Height_Cylinder);
+        Draw_Cylinder(Radius_Cylinder, Height_Cylinder, "Red", 1.0);
     }
     else if (shape_name == "Ellipse") {
         bool ok;
@@ -1135,14 +1482,22 @@ void Change_Shapes(QComboBox* comboBox,
         if (!ok) {
             return;
         }
-        Draw_Ellipse(MAJOR_AXIS, MINOR_AXIS);
+        Draw_Ellipse(MAJOR_AXIS, MINOR_AXIS, "Red", 1.0);
     }
     else if (shape_name == "Triangle Strip") {
     }
     else if (shape_name == "Text") {
     }
     else if (shape_name == "Square") {
-        Draw_Square();
+        bool ok;
+        Radius_Square = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Square:", 0.0, -100.0, 100.0, 2, &ok);
+        if (!ok) {
+            return;
+        }
+        Draw_Square(Radius_Square, "Red", 1.0);
+    }
+    else if (shape_name == "Rosette") {
+        Draw_Rosette();
     }
     window->Render();
 }
