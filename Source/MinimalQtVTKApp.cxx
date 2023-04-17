@@ -57,7 +57,7 @@ namespace {
     void Randomize(vtkSphereSource* sphere, vtkMapper* mapper,
         vtkGenericOpenGLRenderWindow* window, std::mt19937& randEng);
    // void DrawLine(vtkRenderer* renderer, int startX, int startY, int endX, int endY);
-    void DrawLine(vtkRenderer* renderer, vtkPoints* points, vtkNamedColors* colors);
+    void DrawLine( vtkPoints* points);
     void DrawPolyLine(vtkSmartPointer<vtkActor> Poly_Line_Actor, vtkDataSetMapper* Poly_Line_mapper, vtkSmartPointer<vtkLineSource> Poly_Line_Source, vtkSmartPointer<vtkRenderer> Poly_Line_renderer, vtkSmartPointer<vtkPoints> points);
     void Change_Shapes(QComboBox* comboBox,
         vtkGenericOpenGLRenderWindow* window);
@@ -92,14 +92,14 @@ namespace {
                 // Draw the line
                 if (this->Points->GetNumberOfPoints() > 2 && this->flag == true)
                 {
-                    DrawLine(renderer, this->Points, this->Color);
+                    DrawLine(this->Points);
                 }
                 else if (this->Points->GetNumberOfPoints() > 2 && this->Polyflag == true && this->Points->GetNumberOfPoints() <= 3) {
                     vtkSmartPointer<vtkActor> PolyLineActor = actor;
                     vtkDataSetMapper* PolyLineMapper = mapper;
                     vtkSmartPointer<vtkLineSource> PolyLineSource = lineSource;
                     vtkSmartPointer<vtkRenderer>PolyLineRenderer = renderer;
-                    DrawPolyLine(PolyLineActor, PolyLineMapper, PolyLineSource, PolyLineRenderer, Points);
+                    DrawPolyLine(PolyLineActor, PolyLineMapper, PolyLineSource, PolyLineRenderer, this->Points);
                     //DrawLine(renderer, this->Points, this->Color);
                    // Points->InsertNextPoint(point); // insert the first point again
                    // DrawLine(renderer, this->Points, this->Color);
@@ -196,13 +196,14 @@ namespace {
     void DrawPolyLine(vtkSmartPointer<vtkActor> Poly_Line_Actor, vtkDataSetMapper* Poly_Line_mapper, vtkSmartPointer<vtkLineSource> Poly_Line_Source, vtkSmartPointer<vtkRenderer> Poly_Line_renderer, vtkSmartPointer<vtkPoints> points) {
         
         lineSource->SetPoints(points);
-        mapper->SetInputConnection(Poly_Line_Source->GetOutputPort());
+        mapper->SetInputConnection(lineSource->GetOutputPort());
         mapper->Update();
-        actor->SetMapper(Poly_Line_mapper);
+        actor->SetMapper(mapper);
         actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
         actor->GetProperty()->SetLineWidth(3.0);
 
         // Add the actor to the scene
+        renderer->RemoveAllViewProps();
         renderer->AddActor(actor);
 
        // Poly_Line_Source->Delete();
@@ -211,7 +212,7 @@ namespace {
         //Poly_Line_renderer->Delete();
         
     }
-    void Draw_circle(vtkSmartPointer<vtkActor> actor, vtkDataSetMapper* mapper, vtkSmartPointer<vtkLineSource> lineSource, vtkSmartPointer<vtkRenderer> renderer)
+    void Draw_circle()
     {
        
 
@@ -241,6 +242,7 @@ namespace {
         actor->GetProperty()->SetLineWidth(2.0); // Set line width of the circle
 
         // Add the actor to the renderer
+        renderer->RemoveAllViewProps();
         renderer->AddActor(actor);
     }
 
@@ -303,7 +305,7 @@ namespace {
         // Add the actor to the renderer
         renderer->AddActor(actor);
     }
-    void DrawLine(vtkRenderer* Renderer, vtkPoints* points, vtkNamedColors* colors) {
+    void DrawLine(vtkPoints* points) {
 
        lineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
        lineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
@@ -317,6 +319,7 @@ namespace {
         actor->GetProperty()->SetLineWidth(3.0);
 
         // Add the actor to the scene
+        renderer->RemoveAllViewProps();
         renderer->AddActor(actor);
     }
 
@@ -483,6 +486,7 @@ namespace {
         //renderer->RemoveAllViewProps();
         vtkNew<MouseInteractorStyleDrawLine> style;
         QString shape_name = comboBox->currentText();
+        renderer->RemoveAllViewProps();
 
         if (shape_name == "Circle")
         {
@@ -491,11 +495,8 @@ namespace {
             style->setPolyFlag(false);
             //style->GetPoints() = NULL;
             /// Actor, Source, Mapper
-            vtkSmartPointer<vtkActor> Circleactor = actor;
-            vtkDataSetMapper* Circlemapper = mapper;
-            vtkSmartPointer<vtkLineSource> CircleSource = lineSource;
-            vtkSmartPointer<vtkRenderer> Circlerenderer = renderer;
-            Draw_circle(Circleactor,Circlemapper,CircleSource,Circlerenderer);
+            
+            Draw_circle();
             
             
         }
@@ -535,14 +536,21 @@ namespace {
                 CircleSource-> Delete();
                 Circlerenderer->Delete();
             }*/
-            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
-            renderWindowInteractor->SetRenderWindow(window);
+            //vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            //renderWindowInteractor->SetRenderWindow(window);
             // Set the custom interactor style
             
             style->SetRenderer(renderer);
             style->setFlag(true);
             style->setPolyFlag(false);
-            renderWindowInteractor->SetInteractorStyle(style.Get());
+            if (!window->GetInteractor())
+            {
+                vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+                renderWindowInteractor->SetRenderWindow(window);
+            }
+
+            // renderWindowInteractor->SetInteractorStyle(style.Get());
+            window->GetInteractor()->SetInteractorStyle(style.Get());
             /*window->Render();
             renderWindowInteractor->Initialize();
             renderWindowInteractor->Start();*/
@@ -558,14 +566,21 @@ namespace {
                 CircleSource-> Delete();
                 Circlerenderer->Delete();
             }*/
-            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
-            renderWindowInteractor->SetRenderWindow(window);
+            /*vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);*/
             // Set the custom interactor style
 
             style->SetRenderer(renderer);
             style->setFlag(false);
             style->setPolyFlag(true);
-            renderWindowInteractor->SetInteractorStyle(style.Get());
+            if (!window->GetInteractor())
+            {
+                vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+                renderWindowInteractor->SetRenderWindow(window);
+            }
+
+           // renderWindowInteractor->SetInteractorStyle(style.Get());
+            window->GetInteractor()->SetInteractorStyle(style.Get());
             /*window->Render();
             renderWindowInteractor->Initialize();
             renderWindowInteractor->Start();*/
