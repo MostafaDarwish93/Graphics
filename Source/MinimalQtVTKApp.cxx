@@ -43,15 +43,52 @@
 #include <vtkAppendPolyData.h>
 #include <vtkConeSource.h>
 #include <vtkTextRepresentation.h>
+#include <QSpinBox>
+#include <QTextEdit>
 using namespace std;
 
 vtkNew<vtkRenderer> renderer;
 
-/// Actor, Source, Mapper
+/// Actor, Source, Mapper    FOR  Line
 vtkSmartPointer<vtkActor> actor = vtkSmartPointer<vtkActor>::New();
 vtkDataSetMapper* mapper = vtkDataSetMapper::New();
 vtkSmartPointer<vtkLineSource> lineSource = vtkSmartPointer<vtkLineSource>::New();
-
+/// Actor, Source, Mapper    FOR  Circle
+vtkSmartPointer<vtkActor> actor_circle = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper_circle = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> circle_Source = vtkSmartPointer<vtkLineSource>::New();
+/// Actor, Source, Mapper    FOR  Ellipse
+vtkSmartPointer<vtkActor> actor_Ellipse = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper_Ellipse = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> Ellipse_Source = vtkSmartPointer<vtkLineSource>::New();
+/// Actor, Source, Mapper    FOR  Regular Polygon
+vtkSmartPointer<vtkActor> actor_Regular_Polygon = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper_Regular_Polygon = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> Regular_Polygon_Source = vtkSmartPointer<vtkLineSource>::New();
+/// Actor, Source, Mapper    FOR  Arc
+vtkSmartPointer<vtkActor> actor_Arc = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper_Arc = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> Arc_Source = vtkSmartPointer<vtkLineSource>::New();
+/// Actor, Source, Mapper    FOR  Cylinder
+vtkSmartPointer<vtkActor> actor_Cylinder = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper_Cylinder = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> Cylinder_Source = vtkSmartPointer<vtkLineSource>::New();
+/// Actor, Source, Mapper    FOR  Sphere
+vtkSmartPointer<vtkActor> actor_Football = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper_Football = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> Football_Source = vtkSmartPointer<vtkLineSource>::New();
+/// Actor, Source, Mapper    FOR  Square
+vtkSmartPointer<vtkActor> actor_Square = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper_Square = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> Square_Source = vtkSmartPointer<vtkLineSource>::New();
+/// Actor, Source, Mapper    FOR  Hexahedron
+vtkSmartPointer<vtkActor> actor_Hexahedron = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper_Hexahedron = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> Hexahedron_Source = vtkSmartPointer<vtkLineSource>::New();
+/// Actor, Source, Mapper    FOR  Star
+vtkSmartPointer<vtkActor> actor_Star = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* mapper_Star = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> Star_Source = vtkSmartPointer<vtkLineSource>::New();
 /// Global Initialization
 double Radius_Circle;
 double Radius_Sphere;
@@ -73,6 +110,8 @@ double x1_line;
 double y1_line;
 double x2_line;
 double y2_line;
+bool is_Polygon = false;
+
 namespace {
     void DrawLine(vtkRenderer* renderer, vtkPoints* points);
 
@@ -80,9 +119,9 @@ namespace {
 
     void Change_Shapes(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window);
 
-    void ChangeColor(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window);
+    void ChangeColor_Button(QComboBox* comboBox_Color, vtkGenericOpenGLRenderWindow* window, QComboBox* comboBox_Shgapes);
 
-    void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window);
+    void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window, QComboBox* comboBox);
 
     void Save(QComboBox* comboBox);
 
@@ -190,17 +229,19 @@ namespace {
             lineSource->SetPoint2(picked[0], picked[1], picked[2]); // Set the second endpoint of the line
             return;
         }
-        virtual void DrawLine() {
-            // Create an actor to display the line
-            actor->SetMapper(mapper);
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        virtual void DrawLine()
+        {
+            // Update the points of the line source
+            lineSource->Update();
 
-            // Add the actor to the renderer
+            // Render the updated line in the renderer
             this->Interactor->GetRenderWindow()
                 ->GetRenderers()
                 ->GetFirstRenderer()
-                ->AddActor(actor);
+                ->Render();
         }
+
+
     };
     vtkStandardNewMacro(MouseInteractorStylePP);
 } // namespace
@@ -299,6 +340,20 @@ int main(int argc, char* argv[])
     transform_list->setCurrentIndex(0); // Set default value
     dockLayout->addWidget(transform_list);
 
+    // Create a QLineEdit object for the input text field
+    QLineEdit* inputTextField_X = new QLineEdit();
+    inputTextField_X->setPlaceholderText("Enter X");
+    dockLayout->addWidget(inputTextField_X);
+
+    // Create a QLineEdit object for the input text field
+    QLineEdit* inputTextField_Y = new QLineEdit();
+    inputTextField_Y->setPlaceholderText("Enter Y");
+    dockLayout->addWidget(inputTextField_Y);
+
+    // Add Point button
+    QPushButton* add_point = new QPushButton("Add Point");
+    dockLayout->addWidget(add_point);
+
     // render area
     QPointer<QVTKOpenGLNativeWidget> vtkRenderWidget =
         new QVTKOpenGLNativeWidget();
@@ -323,12 +378,12 @@ int main(int argc, char* argv[])
 
     // Connect Change Color 
     QObject::connect(changeColorButton, &QPushButton::clicked,
-        [=, &colorDroplist, &window]() { ChangeColor(colorDroplist, window); });
+        [=, &colorDroplist, &window]() { ChangeColor_Button(colorDroplist, window, shapesdroplist); });
 
     // Connect Change Thickness
     QObject::connect(thicknessSlider, &QSlider::valueChanged, [&]() {
         int thickness = thicknessSlider->value();
-        UpdateLineThickness(thickness, window);
+        UpdateLineThickness(thickness, window, shapesdroplist);
         });
 
     // Connect save button
@@ -347,6 +402,8 @@ int main(int argc, char* argv[])
     // Connect Change Color 
     QObject::connect(trasform_button, &QPushButton::clicked,
         [=, &transform_list, &window]() { Transform(transform_list, window); });
+
+    //shapestore.print();
 
     mainWindow.show();
 
@@ -370,39 +427,39 @@ namespace {
             double y = R * sin(2 * vtkMath::Pi() * t);
             points->InsertNextPoint(x, y, 0.0); // Insert points on the circle
         }
-        lineSource->SetPoints(points);
+        circle_Source->SetPoints(points);
 
         // Update the mapper with the new data
-        mapper->SetInputConnection(lineSource->GetOutputPort());
-        mapper->Update();
+        mapper_circle->SetInputConnection(circle_Source->GetOutputPort());
+        mapper_circle->Update();
 
         // Update the actor with the new mapper and properties based on user's choice
-        actor->SetMapper(mapper);
+        actor_circle->SetMapper(mapper_circle);
         if (color == "Red") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            actor_circle->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color == "Blue") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            actor_circle->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color == "Yellow") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            actor_circle->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color == "Green") {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            actor_circle->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color == "Magenta") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            actor_circle->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color == "Black") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            actor_circle->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color == "White") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            actor_circle->GetProperty()->SetColor(1.0, 1.0, 1.0);
         }
-        actor->GetProperty()->SetLineWidth(thickness);
+        actor_circle->GetProperty()->SetLineWidth(thickness);
 
         // Add the actor to the renderer
-        renderer->AddActor(actor);
+        renderer->AddActor(actor_circle);
     }
 
     void Draw_Ellipse(double x_axis, double y_axis, string color, int thickness) {
@@ -420,36 +477,36 @@ namespace {
             points->InsertNextPoint(x, y, 0.0);
         }
 
-        lineSource->SetPoints(points);
+        Ellipse_Source->SetPoints(points);
 
-        mapper->SetInputConnection(lineSource->GetOutputPort());
+        mapper_Ellipse->SetInputConnection(Ellipse_Source->GetOutputPort());
 
-        actor->SetMapper(mapper);
+        actor_Ellipse->SetMapper(mapper_Ellipse);
         if (color == "Red") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            actor_Ellipse->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color == "Blue") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            actor_Ellipse->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color == "Yellow") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            actor_Ellipse->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color == "Green") {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            actor_Ellipse->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color == "Magenta") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            actor_Ellipse->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color == "Black") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            actor_Ellipse->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color == "White") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            actor_Ellipse->GetProperty()->SetColor(1.0, 1.0, 1.0);
         }
-        actor->GetProperty()->SetLineWidth(thickness);
+        actor_Ellipse->GetProperty()->SetLineWidth(thickness);
 
         // Add the actor to the renderer
-        renderer->AddActor(actor);
+        renderer->AddActor(actor_Ellipse);
 
     }
 
@@ -471,38 +528,38 @@ namespace {
         }
 
         // Set the points as the input points for the line source
-        lineSource->SetPoints(points);
+        Regular_Polygon_Source->SetPoints(points);
 
         // Update the mapper with the line source output
-        mapper->SetInputConnection(lineSource->GetOutputPort());
+        mapper_Regular_Polygon->SetInputConnection(Regular_Polygon_Source->GetOutputPort());
 
         // Update the actor with the mapper and properties
-        actor->SetMapper(mapper);
+        actor_Regular_Polygon->SetMapper(mapper_Regular_Polygon);
         if (color == "Red") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            actor_Regular_Polygon->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color == "Blue") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            actor_Regular_Polygon->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color == "Yellow") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            actor_Regular_Polygon->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color == "Green") {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            actor_Regular_Polygon->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color == "Magenta") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            actor_Regular_Polygon->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color == "Black") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            actor_Regular_Polygon->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color == "White") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            actor_Regular_Polygon->GetProperty()->SetColor(1.0, 1.0, 1.0);
         }
-        actor->GetProperty()->SetLineWidth(thickness);
+        actor_Regular_Polygon->GetProperty()->SetLineWidth(thickness);
 
         // Add the actor to the renderer
-        renderer->AddActor(actor);
+        renderer->AddActor(actor_Regular_Polygon);
     }
 
     void Draw_Arc(double radius, string color, int thickness) {
@@ -525,38 +582,38 @@ namespace {
         }
 
         // Set the points as the input points for the line source
-        lineSource->SetPoints(points);
+        Arc_Source->SetPoints(points);
 
         // Update the mapper with the line source output
-        mapper->SetInputConnection(lineSource->GetOutputPort());
+        mapper_Arc->SetInputConnection(Arc_Source->GetOutputPort());
 
         // Update the actor with the mapper and properties
-        actor->SetMapper(mapper);
+        actor_Arc->SetMapper(mapper_Arc);
         if (color == "Red") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            actor_Arc->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color == "Blue") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            actor_Arc->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color == "Yellow") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            actor_Arc->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color == "Green") {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            actor_Arc->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color == "Magenta") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            actor_Arc->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color == "Black") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            actor_Arc->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color == "White") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            actor_Arc->GetProperty()->SetColor(1.0, 1.0, 1.0);
         }
-        actor->GetProperty()->SetLineWidth(thickness);
+        actor_Arc->GetProperty()->SetLineWidth(thickness);
 
         // Add the actor to the renderer
-        renderer->AddActor(actor);
+        renderer->AddActor(actor_Arc);
 
     }
 
@@ -580,38 +637,38 @@ namespace {
         }
 
         // Set the points as the input points for the line source
-        lineSource->SetPoints(points);
+        Cylinder_Source->SetPoints(points);
 
         // Update the mapper with the line source output
-        mapper->SetInputConnection(lineSource->GetOutputPort());
+        mapper_Cylinder->SetInputConnection(Cylinder_Source->GetOutputPort());
 
         // Update the actor with the mapper and properties
-        actor->SetMapper(mapper);
+        actor_Cylinder->SetMapper(mapper_Cylinder);
         if (color == "Red") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            actor_Cylinder->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color == "Blue") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            actor_Cylinder->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color == "Yellow") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            actor_Cylinder->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color == "Green") {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            actor_Cylinder->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color == "Magenta") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            actor_Cylinder->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color == "Black") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            actor_Cylinder->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color == "White") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            actor_Cylinder->GetProperty()->SetColor(1.0, 1.0, 1.0);
         }
-        actor->GetProperty()->SetLineWidth(thickness);
+        actor_Cylinder->GetProperty()->SetLineWidth(thickness);
 
         // Add the actor to the renderer
-        renderer->AddActor(actor);
+        renderer->AddActor(actor_Cylinder);
 
     }
 
@@ -640,38 +697,38 @@ namespace {
         }
 
         // Set the points as the input points for the line source
-        lineSource->SetPoints(points);
+        Football_Source->SetPoints(points);
 
         // Update the mapper with the line source output
-        mapper->SetInputConnection(lineSource->GetOutputPort());
+        mapper_Football->SetInputConnection(Football_Source->GetOutputPort());
 
         // Update the actor with the mapper and properties
-        actor->SetMapper(mapper);
+        actor_Football->SetMapper(mapper_Football);
         if (color == "Red") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            actor_Football->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color == "Blue") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            actor_Football->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color == "Yellow") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            actor_Football->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color == "Green") {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            actor_Football->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color == "Magenta") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            actor_Football->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color == "Black") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            actor_Football->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color == "White") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            actor_Football->GetProperty()->SetColor(1.0, 1.0, 1.0);
         }
-        actor->GetProperty()->SetLineWidth(thickness);
+        actor_Football->GetProperty()->SetLineWidth(thickness);
 
         // Add the actor to the renderer
-        renderer->AddActor(actor);
+        renderer->AddActor(actor_Football);
 
     }
 
@@ -699,39 +756,39 @@ namespace {
         }
 
         // Set the points and cells as the input data for the line source
-        lineSource->SetPoints(points);
+        Square_Source->SetPoints(points);
         //lineSource->SetCells(VTK_HEXAHEDRON, hexahedronCells);
 
         // Update the mapper with the line source output
-        mapper->SetInputConnection(lineSource->GetOutputPort());
+        mapper_Square->SetInputConnection(Square_Source->GetOutputPort());
 
         // Update the actor with the mapper and properties
 
-        actor->SetMapper(mapper);
+        actor_Square->SetMapper(mapper_Square);
         if (color == "Red") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            actor_Square->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color == "Blue") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            actor_Square->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color == "Yellow") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            actor_Square->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color == "Green") {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            actor_Square->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color == "Magenta") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            actor_Square->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color == "Black") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            actor_Square->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color == "White") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            actor_Square->GetProperty()->SetColor(1.0, 1.0, 1.0);
         }
-        actor->GetProperty()->SetLineWidth(thickness);
+        actor_Square->GetProperty()->SetLineWidth(thickness);
         // Add the actor to the renderer
-        renderer->AddActor(actor);
+        renderer->AddActor(actor_Square);
     }
 
     void Draw_Hexahedron(double radius_hex, string color, int thickness)
@@ -780,39 +837,39 @@ namespace {
         points->InsertNextPoint(upperVertices[4]);
 
         // Set the points and cells as the input data for the line source
-        lineSource->SetPoints(points);
+        Hexahedron_Source->SetPoints(points);
         //lineSource->SetCells(VTK_HEXAHEDRON, hexahedronCells);
 
         // Update the mapper with the line source output
-        mapper->SetInputConnection(lineSource->GetOutputPort());
+        mapper_Hexahedron->SetInputConnection(Hexahedron_Source->GetOutputPort());
 
         // Update the actor with the mapper and properties
 
-        actor->SetMapper(mapper);
+        actor_Hexahedron->SetMapper(mapper_Hexahedron);
         if (color == "Red") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            actor_Hexahedron->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color == "Blue") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            actor_Hexahedron->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color == "Yellow") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            actor_Hexahedron->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color == "Green") {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            actor_Hexahedron->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color == "Magenta") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            actor_Hexahedron->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color == "Black") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            actor_Hexahedron->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color == "White") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            actor_Hexahedron->GetProperty()->SetColor(1.0, 1.0, 1.0);
         }
-        actor->GetProperty()->SetLineWidth(thickness);
+        actor_Hexahedron->GetProperty()->SetLineWidth(thickness);
         // Add the actor to the renderer
-        renderer->AddActor(actor);
+        renderer->AddActor(actor_Hexahedron);
     }
 
     void Draw_Polygon() {
@@ -837,39 +894,39 @@ namespace {
         }
 
         // Update the line source with the generated points
-        lineSource->SetPoints(points);
+        Star_Source->SetPoints(points);
 
         // Update the mapper with the new data
-        mapper->SetInputConnection(lineSource->GetOutputPort());
-        mapper->Update();
+        mapper_Star->SetInputConnection(Star_Source->GetOutputPort());
+        mapper_Star->Update();
 
         // Update the actor with the new mapper and properties
-        actor->SetMapper(mapper);
+        actor_Star->SetMapper(mapper_Star);
         if (color == "Red") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            actor_Star->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color == "Blue") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            actor_Star->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color == "Yellow") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            actor_Star->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color == "Green") {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            actor_Star->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color == "Magenta") {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            actor_Star->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color == "Black") {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            actor_Star->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color == "White") {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            actor_Star->GetProperty()->SetColor(1.0, 1.0, 1.0);
         }
-        actor->GetProperty()->SetLineWidth(thickness);
+        actor_Star->GetProperty()->SetLineWidth(thickness);
 
         // Add the actor to the renderer
-        renderer->AddActor(actor);
+        renderer->AddActor(actor_Star);
     }
 
     void DrawLine(vtkGenericOpenGLRenderWindow* window) {
@@ -1551,35 +1608,73 @@ namespace {
         }
     }
 
-    void ChangeColor(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
-        QString color_name = comboBox->currentText();
+    void ChangeColor(string color_name, vtkSmartPointer<vtkActor> temp_actor) {
         if (color_name == "Red")
         {
-            actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+            temp_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
         }
         else if (color_name == "Green")
         {
-            actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
+            temp_actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
         }
         else if (color_name == "Blue")
         {
-            actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
+            temp_actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
         }
         else if (color_name == "Yellow")
         {
-            actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
+            temp_actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
         }
         else if (color_name == "Magenta")
         {
-            actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
+            temp_actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
         }
         else if (color_name == "Black")
         {
-            actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
+            temp_actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
         }
         else if (color_name == "White")
         {
-            actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+            temp_actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
+        }
+    }
+
+    void ChangeColor_Button(QComboBox* comboBox_Color, vtkGenericOpenGLRenderWindow* window, QComboBox* comboBox_Shapes) {
+        QString color_name = comboBox_Color->currentText();
+        QString shape_name = comboBox_Shapes->currentText();
+        std::string color_name_std = color_name.toStdString(); // Convert QString to std::string
+        if (shape_name == "Circle") {
+            ChangeColor(color_name_std, actor_circle); 
+        }
+        else if (shape_name == "Line") {
+            ChangeColor(color_name_std, actor);
+        }
+        else if (shape_name == "Ellipse") {
+            ChangeColor(color_name_std, actor_Ellipse);
+        }
+        else if (shape_name == "Arc") {
+            ChangeColor(color_name_std, actor_Arc);
+        }
+        else if (shape_name == "Sphere") {
+            ChangeColor(color_name_std, actor_Football);
+        }
+        else if (shape_name == "Hexahedron") {
+            ChangeColor(color_name_std, actor_Hexahedron);
+        }
+        else if (shape_name == "Regular Polygon") {
+            ChangeColor(color_name_std, actor_Regular_Polygon);
+        }
+        else if (shape_name == "Cylinder") {
+            ChangeColor(color_name_std, actor_Cylinder);
+        }
+        else if (shape_name == "Square") {
+            ChangeColor(color_name_std, actor_Square);
+        }
+        else if (shape_name == "Star") {
+            ChangeColor(color_name_std, actor_Star);
+        }
+        else {
+            return;
         }
         window->Render();
     }
@@ -1759,9 +1854,51 @@ namespace {
     }
 
 
-    void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window) {
-        actor->GetProperty()->SetLineWidth(thickness);
-        actor->GetMapper()->Update();
+    void UpdateLineThickness(int thickness, vtkGenericOpenGLRenderWindow* window, QComboBox* comboBox) {
+        QString shape_name = comboBox->currentText();
+        if (shape_name == "Circle") {
+            actor_circle->GetProperty()->SetLineWidth(thickness);
+            actor_circle->GetMapper()->Update();
+        }
+        else if (shape_name == "Line") {
+            actor->GetProperty()->SetLineWidth(thickness);
+            actor->GetMapper()->Update();
+        }
+        else if (shape_name == "Ellipse") {
+            actor_Ellipse->GetProperty()->SetLineWidth(thickness);
+            actor_Ellipse->GetMapper()->Update();
+        }
+        else if (shape_name == "Arc") {
+            actor_Arc->GetProperty()->SetLineWidth(thickness);
+            actor_Arc->GetMapper()->Update();
+        }
+        else if (shape_name == "Sphere") {
+            actor_Football->GetProperty()->SetLineWidth(thickness);
+            actor_Football->GetMapper()->Update();
+        }
+        else if (shape_name == "Hexahedron") {
+            actor_Hexahedron->GetProperty()->SetLineWidth(thickness);
+            actor_Hexahedron->GetMapper()->Update();
+        }
+        else if (shape_name == "Regular Polygon") {
+            actor_Regular_Polygon->GetProperty()->SetLineWidth(thickness);
+            actor_Regular_Polygon->GetMapper()->Update();
+        }
+        else if (shape_name == "Cylinder") {
+            actor_Cylinder->GetProperty()->SetLineWidth(thickness);
+            actor_Cylinder->GetMapper()->Update();
+        }
+        else if (shape_name == "Square") {
+            actor_Square->GetProperty()->SetLineWidth(thickness);
+            actor_Square->GetMapper()->Update();
+        }
+        else if (shape_name == "Star") {
+            actor_Star->GetProperty()->SetLineWidth(thickness);
+            actor_Star->GetMapper()->Update();
+        }
+        else {
+            return;
+        }
         window->Render();
     }
 
@@ -1769,8 +1906,6 @@ namespace {
         vtkGenericOpenGLRenderWindow* window)
     {
         QString shape_name = comboBox->currentText();
-
-
         if (shape_name == "Circle")
         {
             bool ok;
@@ -1846,6 +1981,7 @@ namespace {
 
         }
         else if (shape_name == "Polygon") {
+            is_Polygon = true;
             Draw_Polygon();
         }
         else if (shape_name == "Regular Polygon")
