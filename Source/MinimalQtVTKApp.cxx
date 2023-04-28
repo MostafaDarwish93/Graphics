@@ -53,6 +53,14 @@ vtkSmartPointer<vtkLineSource> lineSource = vtkSmartPointer<vtkLineSource>::New(
 //vtkSmartPointer<vtkActor> Actor = vtkSmartPointer<vtkActor>::New();
 //vtkDataSetMapper* Mapper = vtkDataSetMapper::New();
 //vtkSmartPointer<vtkLineSource> LineSource = vtkSmartPointer<vtkLineSource>::New();
+vtkSmartPointer<vtkActor> Delactor = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* Delmapper = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> DellineSource = vtkSmartPointer<vtkLineSource>::New();
+
+vtkSmartPointer<vtkActor> Polygon_actor = vtkSmartPointer<vtkActor>::New();
+vtkDataSetMapper* Polygon_mapper = vtkDataSetMapper::New();
+vtkSmartPointer<vtkLineSource> Polygon_Source = vtkSmartPointer<vtkLineSource>::New();
+
 
 /// Global Initialization
 double Radius_Circle;
@@ -72,6 +80,8 @@ bool Poly_Line = 0;
 namespace {
     void DrawLine(vtkSmartPointer<vtkPoints> points, vtkSmartPointer<vtkLineSource> LineSource,vtkDataSetMapper* Mapper,vtkSmartPointer<vtkActor> Actor,bool flag);
     void DrawPolyLine(vtkSmartPointer<vtkPoints> points,bool flag);
+    void DeleteLine_Poly(vtkSmartPointer<vtkPoints> points);
+    void DrawPolygon(vtkSmartPointer<vtkPoints> points);
 
     void Change_Shapes(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window);
 
@@ -129,11 +139,15 @@ namespace {
                    // Points->InsertNextPoint(point); // insert the first point again
                    // DrawLine(renderer, this->Points, this->Color);
                 }
+                else if (this->Points->GetNumberOfPoints()>2 && this->Polygonflag==true && this->Points->GetNumberOfPoints() <= 3) {
+                    DrawPolygon(this->Points);
+                }
                 else if(this->flag == false && this->Polyflag == false) {
                     /*if(Actor && Mapper && LineSource)
                         DeleteLine();*/
-                    DrawPolyLine(this->Points,this->Polyflag);
-                    DrawLine(this->Points, this->LineSource, this->Mapper, this->Actor, this->flag);
+                    //DrawPolyLine(this->Points,this->Polyflag);
+                    //DrawLine(this->Points, this->LineSource, this->Mapper, this->Actor, this->flag);
+                    DeleteLine_Poly(this-> Points);
                 }
             
 
@@ -160,6 +174,9 @@ namespace {
         void setPolyFlag(bool f) {
             Polyflag = f;
         }
+        void setPolygonFlag(bool f) {
+            Polygonflag = f;
+        }
         void SetPoints(vtkSmartPointer<vtkPoints> Points) {
             this->Points = Points;
         }
@@ -177,6 +194,7 @@ namespace {
         vtkSmartPointer<vtkLineSource> LineSource = vtkSmartPointer<vtkLineSource>::New();
         bool flag;
         bool Polyflag;
+        bool Polygonflag;
         int numofpoints;
     };
     vtkStandardNewMacro(MouseInteractorStyleDrawLine);
@@ -848,7 +866,7 @@ namespace {
 
     void DrawLine(vtkSmartPointer<vtkPoints> points, vtkSmartPointer<vtkLineSource> LineSource, vtkDataSetMapper* Mapper, vtkSmartPointer<vtkActor> Actor,bool flag) {
        
-        if (flag) {
+      
             LineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
             LineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
 
@@ -865,23 +883,8 @@ namespace {
             //LineSource->Delete();
             //Mapper->Delete();
             //Actor->Delete();
-        }
-        else {
-            LineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
-            LineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
-
-            // Create a mapper and actor for the line
-
-            Mapper->SetInputConnection(LineSource->GetOutputPort());
-
-            Actor->SetMapper(Mapper);
-            Actor->GetProperty()->SetColor(renderer->GetBackground());
-            Actor->GetProperty()->SetLineWidth(3.0);
-
-            // Add the actor to the scene
-            renderer->AddActor(Actor);
-        }
         
+       
     }
 
     void DrawPolyLine(vtkSmartPointer<vtkPoints> points,bool flag) {
@@ -895,6 +898,34 @@ namespace {
         // Add the actor to the scene
         //renderer->RemoveAllViewProps();
         renderer->AddActor(actor);
+    }
+    void DeleteLine_Poly(vtkSmartPointer<vtkPoints> points) {
+        DellineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
+        DellineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
+
+        // Create a mapper and actor for the line
+
+        Delmapper->SetInputConnection(DellineSource->GetOutputPort());
+
+        Delactor->SetMapper(Delmapper);
+        Delactor->GetProperty()->SetColor(renderer->GetBackground());
+        Delactor->GetProperty()->SetLineWidth(3.0);
+
+        // Add the actor to the scene
+        renderer->AddActor(Delactor);
+    }
+    void DrawPolygon(vtkSmartPointer<vtkPoints> points) {
+        points->InsertNextPoint(points->GetPoint(0));
+        Polygon_Source->SetPoints(points);
+        Polygon_mapper->SetInputConnection(Polygon_Source->GetOutputPort());
+        Polygon_mapper->Update();
+        Polygon_actor->SetMapper(Polygon_mapper);
+        Polygon_actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        Polygon_actor->GetProperty()->SetLineWidth(3.0);
+
+        // Add the actor to the scene
+        //renderer->RemoveAllViewProps();
+        renderer->AddActor(Polygon_actor);
     }
 
     void Save(QComboBox* comboBox) {
@@ -1653,14 +1684,14 @@ namespace {
         vtkGenericOpenGLRenderWindow* window)
     {
         QString shape_name = comboBox->currentText();
-        renderer->RemoveAllViewProps();
+        //renderer->RemoveAllViewProps();
         vtkNew<MouseInteractorStyleDrawLine> style;
         
         if (shape_name == "Circle")
         {
             bool ok;
-            style->setFlag(false);
-            style->setPolyFlag(false);
+            //style->setFlag(false);
+           // style->setPolyFlag(false);
             Radius_Circle = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the circle:", 0.0, -100.0, 100.0, 2, &ok);
             if (!ok) {
                 return;
@@ -1786,6 +1817,17 @@ namespace {
                 return;
             }
             Draw_Star(Radius_Star, "Red", 1.0);
+        }
+        if (shape_name != "Polyline" && shape_name != "Line") {
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+            // Set the custom interactor style
+
+            style->SetRenderer(renderer);
+
+            style->setFlag(false);
+            style->setPolyFlag(false);
+            renderWindowInteractor->SetInteractorStyle(style.Get());
         }
 
         window->Render();
