@@ -219,7 +219,7 @@ namespace {
         {
             this->Points = vtkSmartPointer<vtkPoints>::New();
             this->Picker = vtkSmartPointer<vtkPointPicker>::New();
-            this->flag = true;
+            
             this->numofpoints = NULL;
         }
 
@@ -231,53 +231,58 @@ namespace {
             this->Picker->GetPickPosition(point);
             std::cout << "Point: " << point[0] << ", " << point[1] << ", " << point[2] << std::endl;
             this->Points->InsertNextPoint(point);
+            if (this->Drawflag) {
+                // Draw the line
+                if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Line")
+                {
+                    /* this->Interactor->GetRenderWindow()
+                         ->GetRenderers()
+                         ->GetFirstRenderer()
+                         ->RemoveAllViewProps();*/
 
-            // Draw the line
-            if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Line")
-            {
-                /* this->Interactor->GetRenderWindow()
-                     ->GetRenderers()
-                     ->GetFirstRenderer()
-                     ->RemoveAllViewProps();*/
+                    DrawLine(this->Points);
+                }
+                else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polyline" && this->Points->GetNumberOfPoints() <= 3) {
 
-                DrawLine(this->Points);
+                    DrawPolyLine(this->Points);
+                    //DrawLine(renderer, this->Points, this->Color);
+                   // Points->InsertNextPoint(point); // insert the first point again
+                   // DrawLine(renderer, this->Points, this->Color);
+                }
+                else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polygon" && this->Points->GetNumberOfPoints() <= 3) {
+                    DrawPolygon(this->Points);
+                }
+                else if (this->ShapeName == "Circle") {
+                    Draw_circle(Radius_Circle, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Sphere") {
+                    Draw_Football(Radius_Sphere, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Arc") {
+                    Draw_Arc(Radius_Arc, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Hexahedron") {
+                    Draw_Hexahedron(Radius_Hexahedron, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Regular Polygon") {
+                    Draw_Regular_Polygon(Radius_Reg_Polygon, NO_POINTS, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Cylinder") {
+                    Draw_Cylinder(Radius_Cylinder, Height_Cylinder, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Ellipse") {
+                    Draw_Ellipse(MAJOR_AXIS, MINOR_AXIS, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Square") {
+                    Draw_Square(Radius_Square, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Star") {
+                    Draw_Star(Radius_Star, "Red", 1.0);
+                }
             }
-            else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polyline" && this->Points->GetNumberOfPoints() <= 3) {
+            else if (this->Transformflag == true) {
 
-                DrawPolyLine(this->Points);
-                //DrawLine(renderer, this->Points, this->Color);
-               // Points->InsertNextPoint(point); // insert the first point again
-               // DrawLine(renderer, this->Points, this->Color);
-            }
-            else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polygon" && this->Points->GetNumberOfPoints() <= 3) {
-                DrawPolygon(this->Points);
-            }
-            else if (this->ShapeName == "Circle") {
-                Draw_circle(Radius_Circle, "Red", 1.0);
-            }
-            else if (this->ShapeName == "Sphere") {
-                Draw_Football(Radius_Sphere, "Red", 1.0);
-            }
-            else if (this->ShapeName == "Arc") {
-                Draw_Arc(Radius_Arc, "Red", 1.0);
-            }
-            else if (this->ShapeName == "Hexahedron") {
-                Draw_Hexahedron(Radius_Hexahedron, "Red", 1.0);
-            }
-            else if (this->ShapeName == "Regular Polygon") {
-                Draw_Regular_Polygon(Radius_Reg_Polygon, NO_POINTS, "Red", 1.0);
-            }
-            else if (this->ShapeName == "Cylinder") {
-                Draw_Cylinder(Radius_Cylinder, Height_Cylinder, "Red", 1.0);
-            }
-            else if (this->ShapeName == "Ellipse") {
-                Draw_Ellipse(MAJOR_AXIS, MINOR_AXIS, "Red", 1.0);
-            }
-            else if (this->ShapeName == "Square") {
-                Draw_Square(Radius_Square, "Red", 1.0);
-            }
-            else if (this->ShapeName == "Star") {
-                Draw_Star(Radius_Star, "Red", 1.0);
+
             }
             //else if(this->flag == false && this->Polyflag == false && this->Polygonflag == false) {
             //    /*if(Actor && Mapper && LineSource)
@@ -302,14 +307,14 @@ namespace {
         {
             this->Renderer = renderer;
         }
-        void setFlag(bool f) {
-            this->flag = f;
+        void setDrawFlag(bool f) {
+            this->Drawflag = f;
         }
         bool getFLag() {
-            return flag;
+            return Drawflag;
         }
-        void setPolyFlag(bool f) {
-            Polyflag = f;
+        void setTransformFlag(bool f) {
+            Transformflag = f;
         }
         void setPolygonFlag(bool f) {
             Polygonflag = f;
@@ -336,8 +341,8 @@ namespace {
         vtkDataSetMapper* Mapper = vtkDataSetMapper::New();
         vtkSmartPointer<vtkLineSource> LineSource = vtkSmartPointer<vtkLineSource>::New();
         std::string ShapeName;
-        bool flag;
-        bool Polyflag;
+        bool Drawflag;
+        bool Transformflag;
         bool Polygonflag;
         double Radius;
         int numofpoints;
@@ -1368,7 +1373,15 @@ namespace {
         QString color_name = comboBox_Color->currentText();
         QString shape_name = comboBox_Shapes->currentText();
         std::string color_name_std = color_name.toStdString(); // Convert QString to std::string
+        vtkNew<MouseInteractorStyleDrawLine> style;
+        //style->setShapeName(shape_name);
+        style->setDrawFlag(false);
+        vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+        renderWindowInteractor->SetRenderWindow(window);
 
+        style->SetRenderer(renderer);
+
+        renderWindowInteractor->SetInteractorStyle(style.Get());
         if (count_shapes > 1) {
             QMessageBox messageBox;
             messageBox.setText("Choose which shape you want to color");
@@ -1818,6 +1831,15 @@ namespace {
             messageBox.exec();
             QString buttonText = messageBox.clickedButton()->text();
             thickness_mode = buttonText.toStdString();
+            vtkNew<MouseInteractorStyleDrawLine> style;
+            //style->setShapeName(shape_name);
+            style->setDrawFlag(false);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             if (thickness_mode == "Last shape drawn") {
                 if (shape_name == "Circle") {
                     updatethickness_2(actor_circle, thickness);
@@ -1920,6 +1942,15 @@ namespace {
             }
         }
         else {
+            vtkNew<MouseInteractorStyleDrawLine> style;
+            //style->setShapeName(shape_name);
+            style->setDrawFlag(false);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             if (shape_name == "Circle") {
                 updatethickness_2(actor_circle, thickness);
             }
@@ -1974,6 +2005,7 @@ namespace {
         std::string shape_name = comboBox->currentText().toStdString();
         vtkNew<MouseInteractorStyleDrawLine> style;
         style->setShapeName(shape_name);
+        style->setDrawFlag(true);
         if (shape_name == "Circle")
         {
             bool ok;
@@ -2078,8 +2110,7 @@ namespace {
                 // Set the custom interactor style
                 style->SetRenderer(renderer);
 
-                style->setFlag(true);
-                style->setPolyFlag(false);
+                
                 style->setPolygonFlag(false);
                 renderWindowInteractor->SetInteractorStyle(style.Get());
             }
@@ -2092,8 +2123,7 @@ namespace {
             renderWindowInteractor->SetRenderWindow(window);
             // Set the custom interactor style
             style->SetRenderer(renderer);
-            style->setFlag(false);
-            style->setPolyFlag(true);
+           
             style->setPolygonFlag(false);
             renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
@@ -2104,9 +2134,7 @@ namespace {
             renderWindowInteractor->SetRenderWindow(window);
             // Set the custom interactor style
             style->SetRenderer(renderer);
-            style->setFlag(false);
-            style->setPolyFlag(false);
-            style->setPolygonFlag(true);
+            
             renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
             add_shape_list(shape_name, shapeListWidget);
@@ -2243,6 +2271,15 @@ namespace {
 
     void Delete(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
         QString shape_name = comboBox->currentText();
+        vtkNew<MouseInteractorStyleDrawLine> style;
+        //style->setShapeName(shape_name);
+        style->setDrawFlag(false);
+        vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+        renderWindowInteractor->SetRenderWindow(window);
+
+        style->SetRenderer(renderer);
+
+        renderWindowInteractor->SetInteractorStyle(style.Get());
         if (count_shapes == 1) {
             delete_all_shapes();
             count_shapes = 0;
@@ -2537,6 +2574,7 @@ namespace {
     }
 
     void transform_modes(QString transform_state, QString shape_name) {
+
         if (transform_state == "Translation") {
             bool ok;
             double m13 = QInputDialog::getDouble(nullptr, "Enter Transformation X", "Enter the Transformation X:", 0.0, -100.0, 100.0, 2, &ok);
@@ -2547,6 +2585,8 @@ namespace {
             if (!ok) {
                 return;
             }
+            
+
             if (shape_name == "Circle") {
                 Translation(circle_Source, mapper_circle, m13, m23);
             }
@@ -2913,6 +2953,18 @@ namespace {
             messageBox.exec();
             QString buttonText = messageBox.clickedButton()->text();
             transform_mode = buttonText.toStdString();
+            ///////////
+            vtkNew<MouseInteractorStyleDrawLine> style;
+            //style->setShapeName(shape_name);
+            style->setDrawFlag(false);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
+            // Set the custom interactor style
+            /////////////////
             if (transform_mode == "Last shape drawn") {
                 transform_modes(transform_state, shape_name);
             }
@@ -2994,6 +3046,15 @@ namespace {
             }
         }
         else {
+            vtkNew<MouseInteractorStyleDrawLine> style;
+            //style->setShapeName(shape_name);
+            style->setDrawFlag(false);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             transform_modes(transform_state, shape_name);
         }
         window->Render();
