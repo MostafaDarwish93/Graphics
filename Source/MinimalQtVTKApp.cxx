@@ -256,15 +256,32 @@ namespace {
                 {
                     Draw_Line(x1_line, y1_line, x2_line, y2_line, "Red", 1.0);
                 }
-                else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polyline" && this->Points->GetNumberOfPoints() <= 3) {
+                else if (this->ShapeName == "Polyline" && this->Points->GetNumberOfPoints() == NO_POINTS) {
 
                     DrawPolyLine(this->Points);
                 }
-                else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polygon" && this->Points->GetNumberOfPoints() <= 3) {
+                else if (this->ShapeName == "Polygon" && this->Points->GetNumberOfPoints() == NO_POINTS) {
                     DrawPolygon(this->Points);
                 }
-                else if (this->ShapeName == "Circle") {
+                else if (this->ShapeName == "Circle" && mode_line == "Enter points") {
                     Draw_circle(Radius_Circle, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Circle" && mode_line != "Enter points" && this->Points->GetNumberOfPoints() > 2) {
+                    /*double* p0 = Points->GetPoint(0);
+                    double *p1= Points->GetPoint(1);
+                    Radius = double(p1 - p0);*/
+                    //Radius = double (this->Points->GetPoint(Points->GetNumberOfPoints() - 1)- this->Points->GetPoint(Points->GetNumberOfPoints() - 2));
+                    double* point1 = Points->GetPoint(Points->GetNumberOfPoints() - 2);
+                    double* point2 = Points->GetPoint(Points->GetNumberOfPoints() - 1);
+                    x1_line = double(point1[0] * 100) / 100;
+                    y1_line = double(point1[1] * 100) / 100;
+
+                    x2_line = double(point2[0] * 100) / 100;
+                    y2_line = double(point2[1] * 100) / 100;
+                    double x = x2_line - x1_line;
+                    double y = y2_line - y1_line;
+                    Radius = sqrt(x*x+y*y);
+                    Draw_circle(Radius, "Red", 1.0);
                 }
                 else if (this->ShapeName == "Sphere") {
                     Draw_Football(Radius_Sphere, "Red", 1.0);
@@ -328,6 +345,9 @@ namespace {
         vtkSmartPointer<vtkPoints> GetPoints() {
             return Points;
         }
+        void setNumberOfPoints(int p) {
+            NumberOfPoints = p;
+        }
 
     private:
         vtkSmartPointer<vtkPoints> Points;
@@ -342,6 +362,7 @@ namespace {
         bool Transformflag;
         bool Polygonflag;
         double Radius;
+        int NumberOfPoints;
         int numofpoints;
     };
     vtkStandardNewMacro(MouseInteractorStyleDrawLine);
@@ -1928,21 +1949,41 @@ namespace {
         style->setDrawFlag(true);
         if (shape_name == "Circle")
         {
-            bool ok;
-            Radius_Circle = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the circle:", 0.0, -100.0, 100.0, 2, &ok);
-            if (!ok) {
-                return;
+            QMessageBox messageBox;
+            messageBox.setText("Choose Drawning Style");
+            QAbstractButton* button = messageBox.addButton(QMessageBox::tr("Mouse Click"), QMessageBox::YesRole);
+            QAbstractButton* button_1 = messageBox.addButton(QMessageBox::tr("Enter points"), QMessageBox::YesRole);
+            messageBox.exec();
+            QString buttonText = messageBox.clickedButton()->text();
+            mode_line = buttonText.toStdString();
+            if (mode_line == "Enter points") {
+                bool ok;
+                Radius_Circle = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the circle:", 0.0, -100.0, 100.0, 2, &ok);
+                if (!ok) {
+                    return;
+                }
+
+                vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+                renderWindowInteractor->SetRenderWindow(window);
+                // Set the custom interactor style
+
+                style->SetRenderer(renderer);
+
+                renderWindowInteractor->SetInteractorStyle(style.Get());
+                drawnshapes_and_all_count(shape_name);
+                add_shape_list(shape_name, shapeListWidget);
             }
+            else {
+                vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+                renderWindowInteractor->SetRenderWindow(window);
+                // Set the custom interactor style
 
-            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
-            renderWindowInteractor->SetRenderWindow(window);
-            // Set the custom interactor style
+                style->SetRenderer(renderer);
 
-            style->SetRenderer(renderer);
-
-            renderWindowInteractor->SetInteractorStyle(style.Get());
-            drawnshapes_and_all_count(shape_name);
-            add_shape_list(shape_name, shapeListWidget);
+                renderWindowInteractor->SetInteractorStyle(style.Get());
+                drawnshapes_and_all_count(shape_name);
+                add_shape_list(shape_name, shapeListWidget);
+            }
         }
         else if (shape_name == "Sphere") {
             bool ok;
@@ -2047,6 +2088,11 @@ namespace {
         }
         else if (shape_name == "Polyline")
         {
+            bool ok;
+            NO_POINTS = QInputDialog::getDouble(nullptr, "Enter Points", "Enter the PolyLine Points:", 0.0, -100.0, 100.0, 2, &ok);
+            if (!ok) {
+                return;
+            }
             vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
             renderWindowInteractor->SetRenderWindow(window);
             // Set the custom interactor style
@@ -2058,6 +2104,11 @@ namespace {
             add_shape_list(shape_name, shapeListWidget);
         }
         else if (shape_name == "Polygon") {
+            bool ok;
+            NO_POINTS = QInputDialog::getDouble(nullptr, "Enter Points", "Enter the Polygon Points:", 0.0, -100.0, 100.0, 2, &ok);
+            if (!ok) {
+                return;
+            }
             vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
             renderWindowInteractor->SetRenderWindow(window);
             // Set the custom interactor style
