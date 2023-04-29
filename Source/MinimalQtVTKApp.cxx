@@ -170,6 +170,27 @@ namespace {
 
     void DrawLine(vtkSmartPointer<vtkPoints> points);
 
+    void DrawPolygon(vtkSmartPointer<vtkPoints> points);
+
+    void Draw_circle(double radius, string color, int thickness);
+
+    void Draw_Ellipse(double x_axis, double y_axis, string color, int thickness);
+
+
+    void Draw_Arc(double radius, string color, int thickness);
+
+    void Draw_Cylinder(double radius, double height, string color, int thickness);
+
+    void Draw_Football(double radius, string color, int thickness);
+
+    void Draw_Square(double radius_square, string color, int thickness);
+
+    void Draw_Hexahedron(double radius_hex, string color, int thickness);
+
+    void Draw_Star(double radius, string color, int thickness);
+
+    void Draw_Regular_Polygon(double radius, int no_points, string color, int thickness);
+
     void Change_Shapes(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window, QListWidget& shapeListWidget);
 
     void ChangeColor_Button(QComboBox* comboBox_Color, vtkGenericOpenGLRenderWindow* window, QComboBox* comboBox_Shapes);
@@ -198,7 +219,7 @@ namespace {
         {
             this->Points = vtkSmartPointer<vtkPoints>::New();
             this->Picker = vtkSmartPointer<vtkPointPicker>::New();
-            this->flag = true;
+
             this->numofpoints = NULL;
         }
 
@@ -209,37 +230,67 @@ namespace {
             double point[3];
             this->Picker->GetPickPosition(point);
             std::cout << "Point: " << point[0] << ", " << point[1] << ", " << point[2] << std::endl;
+            // Add a text actor to show the clicked point
+            vtkSmartPointer<vtkTextActor> textActor = vtkSmartPointer<vtkTextActor>::New();
+            std::string text = "Point: (" + std::to_string(point[0]) + ", " + std::to_string(point[1]) + ") ";// +std::to_string(point[2]) + ")";
+            textActor->SetInput(text.c_str());
+            textActor->SetDisplayPosition(this->Interactor->GetEventPosition()[0], this->Interactor->GetEventPosition()[1]);
+            vtkPropCollection* actors = renderer->GetViewProps();
+            actors->InitTraversal();
+            vtkProp* actor = nullptr;
+            while ((actor = actors->GetNextProp()) != nullptr) {
+                vtkSmartPointer<vtkTextActor> textProp = vtkTextActor::SafeDownCast(actor);
+                if (textProp) {
+                    renderer->RemoveActor2D(textProp);
+                }
+            }
+            renderer->AddActor2D(textActor);
             this->Points->InsertNextPoint(point);
+            if (this->Drawflag) {
+                // Draw the line
+                if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Line")
+                {
+                    DrawLine(this->Points);
+                }
+                else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polyline" && this->Points->GetNumberOfPoints() <= 3) {
 
-            // Draw the line
-            if (this->Points->GetNumberOfPoints() > 2 && this->flag == true)
-            {
-                /* this->Interactor->GetRenderWindow()
-                     ->GetRenderers()
-                     ->GetFirstRenderer()
-                     ->RemoveAllViewProps();*/
-
-                DrawLine(this->Points);
+                    DrawPolyLine(this->Points);
+                }
+                else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polygon" && this->Points->GetNumberOfPoints() <= 3) {
+                    DrawPolygon(this->Points);
+                }
+                else if (this->ShapeName == "Circle") {
+                    Draw_circle(Radius_Circle, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Sphere") {
+                    Draw_Football(Radius_Sphere, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Arc") {
+                    Draw_Arc(Radius_Arc, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Hexahedron") {
+                    Draw_Hexahedron(Radius_Hexahedron, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Regular Polygon") {
+                    Draw_Regular_Polygon(Radius_Reg_Polygon, NO_POINTS, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Cylinder") {
+                    Draw_Cylinder(Radius_Cylinder, Height_Cylinder, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Ellipse") {
+                    Draw_Ellipse(MAJOR_AXIS, MINOR_AXIS, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Square") {
+                    Draw_Square(Radius_Square, "Red", 1.0);
+                }
+                else if (this->ShapeName == "Star") {
+                    Draw_Star(Radius_Star, "Red", 1.0);
+                }
             }
-            else if (this->Points->GetNumberOfPoints() > 2 && this->Polyflag == true /*&& this->Points->GetNumberOfPoints() <= 3*/) {
-
-                DrawPolyLine(this->Points);
-                //DrawLine(renderer, this->Points, this->Color);
-               // Points->InsertNextPoint(point); // insert the first point again
-               // DrawLine(renderer, this->Points, this->Color);
-            }
-            else if (this->Points->GetNumberOfPoints() > 2 && this->Polygonflag == true && this->Points->GetNumberOfPoints() <= 3) {
-                DrawPolygon(this->Points);
-            }
-            else if (this->flag == false && this->Polyflag == false && this->Polygonflag == false) {
-                /*if(Actor && Mapper && LineSource)
-                    DeleteLine();*/
-                    //DrawPolyLine(this->Points,this->Polyflag);
-                    //DrawLine(this->Points, this->LineSource, this->Mapper, this->Actor, this->flag);
-                DeleteLine_Poly(this->Points);
-            }
+            else if (this->Transformflag == true) {
 
 
+            }
             // Forward events
             vtkInteractorStyleTrackballCamera::OnLeftButtonDown();
         }
@@ -254,17 +305,23 @@ namespace {
         {
             this->Renderer = renderer;
         }
-        void setFlag(bool f) {
-            this->flag = f;
+        void setDrawFlag(bool f) {
+            this->Drawflag = f;
         }
         bool getFLag() {
-            return flag;
+            return Drawflag;
         }
-        void setPolyFlag(bool f) {
-            Polyflag = f;
+        void setTransformFlag(bool f) {
+            Transformflag = f;
         }
         void setPolygonFlag(bool f) {
             Polygonflag = f;
+        }
+        void setShapeName(std::string Sh) {
+            ShapeName = Sh;
+        }
+        void SetRadius(double r) {
+            Radius = r;
         }
         void SetPoints(vtkSmartPointer<vtkPoints> Points) {
             this->Points = Points;
@@ -281,9 +338,11 @@ namespace {
         vtkSmartPointer<vtkActor> Actor = vtkSmartPointer<vtkActor>::New();
         vtkDataSetMapper* Mapper = vtkDataSetMapper::New();
         vtkSmartPointer<vtkLineSource> LineSource = vtkSmartPointer<vtkLineSource>::New();
-        bool flag;
-        bool Polyflag;
+        std::string ShapeName;
+        bool Drawflag;
+        bool Transformflag;
         bool Polygonflag;
+        double Radius;
         int numofpoints;
     };
     vtkStandardNewMacro(MouseInteractorStyleDrawLine);
@@ -323,7 +382,7 @@ int main(int argc, char* argv[])
     dockLayout->addWidget(&uploadButton);
 
     // Change color Button 
-    QPushButton* changeColorButton = new QPushButton("Change color");
+    QPushButton* changeColorButton = new QPushButton("Add color");
     dockLayout->addWidget(changeColorButton);
 
     // Color droplist
@@ -803,42 +862,20 @@ namespace {
     }
 
     void Draw_Line(double x1_line, double y1_line, double x2_line, double y2_line, string color, int thickness) {
-    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
-    points->InsertNextPoint(x1_line, y1_line, 0.0);
-    points->InsertNextPoint(x2_line, y2_line, 0.0);
+        vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+        points->InsertNextPoint(x1_line, y1_line, 0.0);
+        points->InsertNextPoint(x2_line, y2_line, 0.0);
 
-    // Set the points for the vtkLineSource
-    lineSource->SetPoints(points);
-    mapper->SetInputConnection(lineSource->GetOutputPort());
-    mapper->Update();
+        // Set the points for the vtkLineSource
+        lineSource->SetPoints(points);
+        mapper->SetInputConnection(lineSource->GetOutputPort());
+        mapper->Update();
 
-    // Set the mapper to the actor and add it to the renderer
-    actor->SetMapper(mapper);
-    if (color == "Red") {
-        actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+        // Set the mapper to the actor and add it to the renderer
+        actor->SetMapper(mapper);
+        set_color_and_thickness(color, thickness, actor);
+        renderer->AddActor(actor);
     }
-    else if (color == "Blue") {
-        actor->GetProperty()->SetColor(0.0, 0.0, 1.0);
-    }
-    else if (color == "Yellow") {
-        actor->GetProperty()->SetColor(1.0, 1.0, 0.0);
-    }
-    else if (color == "Green") {
-        actor->GetProperty()->SetColor(0.0, 1.0, 0.0);
-    }
-    else if (color == "Magenta") {
-        actor->GetProperty()->SetColor(1.0, 0.0, 1.0);
-    }
-    else if (color == "Black") {
-        actor->GetProperty()->SetColor(0.0, 0.0, 0.0);
-    }
-    else if (color == "White") {
-        actor->GetProperty()->SetColor(1.0, 1.0, 1.0);
-    }
-    actor->GetProperty()->SetLineWidth(thickness);
-
-    renderer->AddActor(actor);
-}
 
     void DrawLine(vtkSmartPointer<vtkPoints> points) {
 
@@ -846,8 +883,17 @@ namespace {
         lineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
         lineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
 
-        // Create a mapper and actor for the line
+        ///// Get X and Y of both points ////////////
+        double* point1 = points->GetPoint(points->GetNumberOfPoints() - 2);
+        double* point2 = points->GetPoint(points->GetNumberOfPoints() - 1);
 
+        x1_line = floor(point1[0] * 100) / 100;
+        y1_line = floor(point1[1] * 100) / 100;
+
+        x2_line = floor(point2[0] * 100) / 100;
+        y2_line = floor(point2[1] * 100) / 100;
+
+        // Create a mapper and actor for the line
         mapper->SetInputConnection(lineSource->GetOutputPort());
 
         actor->SetMapper(mapper);
@@ -955,23 +1001,18 @@ namespace {
             if (!filename_txt.isEmpty()) {
                 // Open the TXT output file for writing
                 std::ofstream outputFile_txt(filename_txt.toStdString());
-                outputFile_txt << "Shape\t\tRadius\tMajor Axis\tMinor Axis\tHeight\tNumber of sides\tColor\tThickness\tDeleted" << std::endl;
+                outputFile_txt << "Shape\t\tX1\tY1\tX2\tY2\tRadius\tMajor Axis\tMinor Axis\tHeight\tNumber of sides\tColor\tThickness\tDeleted" << std::endl;
                 for (const auto& shape : drawnShapes_all) {
                     if (shape == "Circle") {
                         // Get the properties of the circle
                         double* color = actor_circle->GetProperty()->GetColor();
                         double thickness = actor_circle->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_txt << "Circle\t\t" << Radius_Circle << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || circle_deleted == true) {
+                            outputFile_txt << "Circle\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Circle << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                         else {
-                            if (circle_deleted == true) {
-                                outputFile_txt << "Circle\t\t" << Radius_Circle << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << Color_Circle << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_txt << "Circle\t\t" << Radius_Circle << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
-                            }
+                            outputFile_txt << "Circle\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Circle << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
                         }
                     }
                     else if (shape == "Star") {
@@ -979,16 +1020,11 @@ namespace {
                         double* color = actor_Star->GetProperty()->GetColor();
                         double thickness = actor_Star->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_txt << "Star\t\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Star_deleted == true) {
+                            outputFile_txt << "Star\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                         else {
-                            if (Star_deleted == true) {
-                                outputFile_txt << "Star\t\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << Color_Star << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_txt << "Star\t\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
+                            outputFile_txt << "Star\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                     }
                     else if (shape == "Ellipse") {
@@ -996,16 +1032,11 @@ namespace {
                         double* color = actor_Ellipse->GetProperty()->GetColor();
                         double thickness = actor_Ellipse->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_txt << "Ellipse\t\t" << "NULL" << "\t" << MAJOR_AXIS << "\t\t" << MINOR_AXIS << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || ellipse_deleted == true) {
+                            outputFile_txt << "Ellipse\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << MAJOR_AXIS << "\t\t" << MINOR_AXIS << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                         else {
-                            if (ellipse_deleted == true) {
-                                outputFile_txt << "Ellipse\t\t" << "NULL" << "\t" << MAJOR_AXIS << "\t\t" << MINOR_AXIS << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << Color_Ellipse << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_txt << "Ellipse\t\t" << "NULL" << "\t" << MAJOR_AXIS << "\t\t" << MINOR_AXIS << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
-                            }
+                            outputFile_txt << "Ellipse\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << MAJOR_AXIS << "\t\t" << MINOR_AXIS << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
                         }
                     }
                     else if (shape == "Cylinder") {
@@ -1013,16 +1044,11 @@ namespace {
                         double* color = actor_Cylinder->GetProperty()->GetColor();
                         double thickness = actor_Cylinder->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_txt << "Cylinder\t" << Radius_Cylinder << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << Height_Cylinder << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Cylinder_deleted == true) {
+                            outputFile_txt << "Cylinder\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Cylinder << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << Height_Cylinder << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                         else {
-                            if (Cylinder_deleted == true) {
-                                outputFile_txt << "Cylinder\t" << Radius_Cylinder << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << Height_Cylinder << "\t" << "NULL" << "\t\t" << Color_Cylinder << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_txt << "Cylinder\t" << Radius_Cylinder << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << Height_Cylinder << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
-                            }
+                            outputFile_txt << "Cylinder\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Cylinder << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << Height_Cylinder << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
                         }
                     }
                     else if (shape == "Regular Polygon") {
@@ -1030,16 +1056,11 @@ namespace {
                         double* color = actor_Regular_Polygon->GetProperty()->GetColor();
                         double thickness = actor_Regular_Polygon->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_txt << "Regular Polygon\t" << Radius_Reg_Polygon << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << NO_POINTS << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Regular_Polygon_deleted == true) {
+                            outputFile_txt << "Regular Polygon\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Reg_Polygon << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << NO_POINTS << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                         else {
-                            if (Regular_Polygon_deleted == true) {
-                                outputFile_txt << "Regular Polygon\t" << Radius_Reg_Polygon << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << NO_POINTS << "\t\t" << Color_Regular_Polygon << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_txt << "Regular Polygon\t" << Radius_Reg_Polygon << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << NO_POINTS << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
-                            }
+                            outputFile_txt << "Regular Polygon\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Reg_Polygon << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << NO_POINTS << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
                         }
                     }
                     else if (shape == "Square") {
@@ -1047,16 +1068,11 @@ namespace {
                         double* color = actor_Square->GetProperty()->GetColor();
                         double thickness = actor_Square->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_txt << "Square\t\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Square_deleted == true) {
+                            outputFile_txt << "Square\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                         else {
-                            if (Square_deleted == true) {
-                                outputFile_txt << "Square\t\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << Color_Square << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_txt << "Square\t\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
-                            }
+                            outputFile_txt << "Square\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Star << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
                         }
                     }
                     else if (shape == "Hexahedron") {
@@ -1064,16 +1080,11 @@ namespace {
                         double* color = actor_Hexahedron->GetProperty()->GetColor();
                         double thickness = actor_Hexahedron->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_txt << "Hexahedron\t" << Radius_Hexahedron << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Hexahedron_deleted == true) {
+                            outputFile_txt << "Hexahedron\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Hexahedron << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                         else {
-                            if (Hexahedron_deleted == true) {
-                                outputFile_txt << "Hexahedron\t" << Radius_Hexahedron << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << Color_Hexahedron << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_txt << "Hexahedron\t" << Radius_Hexahedron << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
-                            }
+                            outputFile_txt << "Hexahedron\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Hexahedron << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
                         }
                     }
                     else if (shape == "Arc") {
@@ -1081,16 +1092,11 @@ namespace {
                         double* color = actor_Arc->GetProperty()->GetColor();
                         double thickness = actor_Arc->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_txt << "Arc\t\t" << Radius_Arc << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Arc_deleted == true) {
+                            outputFile_txt << "Arc\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Arc << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                         else {
-                            if (Arc_deleted == true) {
-                                outputFile_txt << "Arc\t\t" << Radius_Arc << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_txt << "Arc\t\t" << Radius_Arc << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
-                            }
+                            outputFile_txt << "Arc\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Arc << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
                         }
                     }
                     else if (shape == "Sphere") {
@@ -1098,16 +1104,22 @@ namespace {
                         double* color = actor_Football->GetProperty()->GetColor();
                         double thickness = actor_Football->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_txt << "Sphere\t\t" << Radius_Sphere << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Sphere_deleted == true) {
+                            outputFile_txt << "Sphere\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Sphere << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
                         }
                         else {
-                            if (Sphere_deleted == true) {
-                                outputFile_txt << "Sphere\t\t" << Radius_Sphere << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << Color_Sphere << "\t" << thickness << "\t\t" << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_txt << "Sphere\t\t" << Radius_Sphere << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
-                            }
+                            outputFile_txt << "Sphere\t\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << "NULL" << "\t" << Radius_Sphere << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL" << "\t" << "NULL" << "\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
+                        }
+                    }
+                    else if (shape == "Line") {
+                        double* color = actor->GetProperty()->GetColor();
+                        double thickness = actor->GetProperty()->GetLineWidth();
+                        string color_name = specify_color(color);
+                        if (drawnShapes.size() == 0 || line_deleted == true) {
+                            outputFile_txt << "Line\t\t" << x1_line << "\t" << y1_line << "\t" << x2_line << "\t" << y2_line << "\t" << "NULL" << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL\t" << "NULL\t\t" << color_name << "\t" << thickness << "\t\t" << "Yes" << std::endl;
+                        }
+                        else {
+                            outputFile_txt << "Line\t\t" << x1_line << "\t" << y1_line << "\t" << x2_line << "\t" << y2_line << "\t" << "NULL" << "\t" << "NULL" << "\t\t" << "NULL" << "\t\t" << "NULL\t" << "NULL\t\t" << color_name << "\t" << thickness << "\t\t" << "No" << std::endl;
                         }
                     }
                 }
@@ -1117,23 +1129,18 @@ namespace {
             if (!filename_csv.isEmpty()) {
                 // Open the CSV output file for writing
                 std::ofstream outputFile_csv(filename_csv.toStdString());
-                outputFile_csv << "Shape,Radius,Major Axis,Minor Axis,Height,Number of sides,Color,Thickness,Deleted" << std::endl;
+                outputFile_csv << "Shape,X1,Y1,X2,Y2,Radius,Major Axis,Minor Axis,Height,Number of sides,Color,Thickness,Deleted" << std::endl;
                 for (const auto& shape : drawnShapes_all) {
                     if (shape == "Circle") {
                         // Get the properties of the circle
                         double* color = actor_circle->GetProperty()->GetColor();
                         double thickness = actor_circle->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_csv << "Circle," << Radius_Circle << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || circle_deleted == true) {
+                            outputFile_csv << "Circle," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Circle << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
                         }
                         else {
-                            if (circle_deleted == true) {
-                                outputFile_csv << "Circle," << Radius_Circle << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Color_Circle << "," << thickness << "," << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_csv << "Circle," << Radius_Circle << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
-                            }
+                            outputFile_csv << "Circle," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Circle << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
                         }
                     }
                     else if (shape == "Square") {
@@ -1141,16 +1148,11 @@ namespace {
                         double* color = actor_Square->GetProperty()->GetColor();
                         double thickness = actor_Square->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_csv << "Square," << Radius_Square << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Square_deleted == true) {
+                            outputFile_csv << "Square," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Square << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
                         }
                         else {
-                            if (Square_deleted == true) {
-                                outputFile_csv << "Square," << Radius_Square << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Color_Square << "," << thickness << "," << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_csv << "Square," << Radius_Square << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
-                            }
+                            outputFile_csv << "Square," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Square << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
                         }
                     }
                     else if (shape == "Star") {
@@ -1158,16 +1160,11 @@ namespace {
                         double* color = actor_Star->GetProperty()->GetColor();
                         double thickness = actor_Star->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_csv << "Star," << Radius_Star << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Star_deleted == true) {
+                            outputFile_csv << "Star," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Star << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
                         }
                         else {
-                            if (Star_deleted == true) {
-                                outputFile_csv << "Star," << Radius_Star << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Color_Star << "," << thickness << "," << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_csv << "Star," << Radius_Star << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
-                            }
+                            outputFile_csv << "Star," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Star << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
                         }
                     }
                     else if (shape == "Ellipse") {
@@ -1175,16 +1172,11 @@ namespace {
                         double* color = actor_Ellipse->GetProperty()->GetColor();
                         double thickness = actor_Ellipse->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_csv << "Ellipse," << "-" << "," << MAJOR_AXIS << "," << MINOR_AXIS << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || ellipse_deleted == true) {
+                            outputFile_csv << "Ellipse," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << MAJOR_AXIS << "," << MINOR_AXIS << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
                         }
                         else {
-                            if (ellipse_deleted == true) {
-                                outputFile_csv << "Ellipse," << "-" << "," << MAJOR_AXIS << "," << MINOR_AXIS << "," << "-" << "," << "-" << "," << Color_Ellipse << "," << thickness << "," << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_csv << "Ellipse," << "-" << "," << MAJOR_AXIS << "," << MINOR_AXIS << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
-                            }
+                            outputFile_csv << "Ellipse," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << MAJOR_AXIS << "," << MINOR_AXIS << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
                         }
                     }
                     else if (shape == "Cylinder") {
@@ -1192,16 +1184,11 @@ namespace {
                         double* color = actor_Cylinder->GetProperty()->GetColor();
                         double thickness = actor_Cylinder->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_csv << "Cylinder," << Radius_Cylinder << "," << "-" << "," << "-" << "," << Height_Cylinder << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Cylinder_deleted == true) {
+                            outputFile_csv << "Cylinder," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Cylinder << "," << "-" << "," << "-" << "," << Height_Cylinder << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
                         }
                         else {
-                            if (Cylinder_deleted == true) {
-                                outputFile_csv << "Cylinder," << Radius_Cylinder << "," << "-" << "," << "-" << "," << Height_Cylinder << "," << "-" << "," << Color_Cylinder << "," << thickness << "," << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_csv << "Cylinder," << Radius_Cylinder << "," << "-" << "," << "-" << "," << Height_Cylinder << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
-                            }
+                            outputFile_csv << "Cylinder," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Cylinder << "," << "-" << "," << "-" << "," << Height_Cylinder << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
                         }
                     }
                     else if (shape == "Regular Polygon") {
@@ -1209,16 +1196,11 @@ namespace {
                         double* color = actor_Regular_Polygon->GetProperty()->GetColor();
                         double thickness = actor_Regular_Polygon->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_csv << "Regular Polygon," << Radius_Reg_Polygon << "," << "-" << "," << "-" << "," << "-" << "," << NO_POINTS << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Regular_Polygon_deleted == true) {
+                            outputFile_csv << "Regular Polygon," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Reg_Polygon << "," << "-" << "," << "-" << "," << "-" << "," << NO_POINTS << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
                         }
                         else {
-                            if (Regular_Polygon_deleted == true) {
-                                outputFile_csv << "Regular Polygon," << Radius_Reg_Polygon << "," << "-" << "," << "-" << "," << "-" << "," << NO_POINTS << "," << Color_Regular_Polygon << "," << thickness << "," << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_csv << "Regular Polygon," << Radius_Reg_Polygon << "," << "-" << "," << "-" << "," << "-" << "," << NO_POINTS << "," << color_name << "," << thickness << "," << "No" << std::endl;
-                            }
+                            outputFile_csv << "Regular Polygon," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Reg_Polygon << "," << "-" << "," << "-" << "," << "-" << "," << NO_POINTS << "," << color_name << "," << thickness << "," << "No" << std::endl;
                         }
                     }
                     else if (shape == "Hexahedron") {
@@ -1226,16 +1208,11 @@ namespace {
                         double* color = actor_Hexahedron->GetProperty()->GetColor();
                         double thickness = actor_Hexahedron->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_csv << "Hexahedron," << Radius_Hexahedron << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Hexahedron_deleted == true) {
+                            outputFile_csv << "Hexahedron," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Hexahedron << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
                         }
                         else {
-                            if (Hexahedron_deleted == true) {
-                                outputFile_csv << "Hexahedron," << Radius_Hexahedron << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Color_Hexahedron << "," << thickness << "," << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_csv << "Hexahedron," << Radius_Hexahedron << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
-                            }
+                            outputFile_csv << "Hexahedron," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Hexahedron << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
                         }
                     }
                     else if (shape == "Arc") {
@@ -1243,16 +1220,11 @@ namespace {
                         double* color = actor_Arc->GetProperty()->GetColor();
                         double thickness = actor_Arc->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_csv << "Arc," << Radius_Arc << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Arc_deleted == true) {
+                            outputFile_csv << "Arc," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Arc << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
                         }
                         else {
-                            if (Arc_deleted == true) {
-                                outputFile_csv << "Arc," << Radius_Arc << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Color_Arc << "," << thickness << "," << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_csv << "Arc," << Radius_Arc << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
-                            }
+                            outputFile_csv << "Arc," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Arc << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
                         }
                     }
                     else if (shape == "Sphere") {
@@ -1260,17 +1232,27 @@ namespace {
                         double* color = actor_Football->GetProperty()->GetColor();
                         double thickness = actor_Football->GetProperty()->GetLineWidth();
                         string color_name = specify_color(color);
-                        if (drawnShapes.size() == 0) {
-                            outputFile_csv << "Sphere," << Radius_Sphere << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        if (drawnShapes.size() == 0 || Sphere_deleted == true) {
+                            outputFile_csv << "Sphere," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Sphere << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
                         }
                         else {
-                            if (Sphere_deleted == true) {
-                                outputFile_csv << "Sphere," << Radius_Sphere << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Color_Sphere << "," << thickness << "," << "Yes" << std::endl;
-                            }
-                            else {
-                                outputFile_csv << "Sphere," << Radius_Sphere << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
-                            }
+                            outputFile_csv << "Sphere," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << Radius_Sphere << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
                         }
+                    }
+                    else if (shape == "Line") {
+                        //Get the color and thickness of the Line
+                        double* color = actor->GetProperty()->GetColor();
+                        double thickness = actor->GetProperty()->GetLineWidth();
+                        string color_name = specify_color(color);
+                        if (drawnShapes.size() == 0 || line_deleted == true) {
+                            outputFile_csv << "Line," << x1_line << "," << y1_line << "," << x2_line << "," << y2_line << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "Yes" << std::endl;
+                        }
+                        else {
+                            outputFile_csv << "Line," << x1_line << "," << y1_line << "," << x2_line << "," << y2_line << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << "-" << "," << color_name << "," << thickness << "," << "No" << std::endl;
+                        }
+                    }
+                    else {
+                        return;
                     }
                 }
             }
@@ -1312,7 +1294,15 @@ namespace {
         QString color_name = comboBox_Color->currentText();
         QString shape_name = comboBox_Shapes->currentText();
         std::string color_name_std = color_name.toStdString(); // Convert QString to std::string
+        vtkNew<MouseInteractorStyleDrawLine> style;
+        //style->setShapeName(shape_name);
+        style->setDrawFlag(false);
+        vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+        renderWindowInteractor->SetRenderWindow(window);
 
+        style->SetRenderer(renderer);
+
+        renderWindowInteractor->SetInteractorStyle(style.Get());
         if (count_shapes > 1) {
             QMessageBox messageBox;
             messageBox.setText("Choose which shape you want to color");
@@ -1517,7 +1507,7 @@ namespace {
                     double thickness;
                     iss >> shape;
                     if (shape == "Circle") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_circle(radius, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1525,7 +1515,7 @@ namespace {
                         }
                     }
                     else if (shape == "Sphere") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_Football(radius, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1533,7 +1523,7 @@ namespace {
                         }
                     }
                     else if (shape == "Arc") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_Arc(radius, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1541,7 +1531,7 @@ namespace {
                         }
                     }
                     else if (shape == "Hexahedron") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_Hexahedron(radius, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1549,7 +1539,7 @@ namespace {
                         }
                     }
                     else if (shape == "Regular_Polygon") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_Regular_Polygon(radius, no_of_sides, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1557,7 +1547,7 @@ namespace {
                         }
                     }
                     else if (shape == "Square") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_Square(radius, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1565,7 +1555,7 @@ namespace {
                         }
                     }
                     else if (shape == "Cylinder") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_Cylinder(radius, cylinder_height, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1573,7 +1563,7 @@ namespace {
                         }
                     }
                     else if (shape == "Ellipse") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_Ellipse(major_axis, minor_axis, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1581,7 +1571,7 @@ namespace {
                         }
                     }
                     else if (shape == "Star") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_Star(radius, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1589,7 +1579,7 @@ namespace {
                         }
                     }
                     else if (shape == "Line") {
-                        iss >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
+                        iss >> x1 >> y1 >> x2 >> y2 >> check_blank >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
                             Draw_Line(x1, y1, x2, y2, color_name, thickness);
                             drawnshapes_and_all_count(shape);
@@ -1621,10 +1611,10 @@ namespace {
                     // Convert QString to string
                     std::string shapeStr = shape.toStdString();
                     if (shapeStr == "Circle") {
-                        double radius = fields[1].toDouble();
-                        std::string color_name = fields.value(6).toStdString();
-                        double thickness = fields[7].toDouble();
-                        std::string is_deleted = fields.value(8).toStdString();
+                        double radius = fields[5].toDouble();
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
                             Draw_circle(radius, color_name, thickness);
                             drawnshapes_and_all_count(shapeStr);
@@ -1632,10 +1622,10 @@ namespace {
                         }
                     }
                     else if (shapeStr == "Sphere") {
-                        double radius = fields[1].toDouble();
-                        std::string color_name = fields.value(6).toStdString();
-                        double thickness = fields[7].toDouble();
-                        std::string is_deleted = fields.value(8).toStdString();
+                        double radius = fields[5].toDouble();
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
                             Draw_Football(radius, color_name, thickness);
                             drawnshapes_and_all_count(shapeStr);
@@ -1643,10 +1633,10 @@ namespace {
                         }
                     }
                     else if (shapeStr == "Arc") {
-                        double radius = fields[1].toDouble();
-                        std::string color_name = fields.value(6).toStdString();
-                        double thickness = fields[7].toDouble();
-                        std::string is_deleted = fields.value(8).toStdString();
+                        double radius = fields[5].toDouble();
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
                             Draw_Arc(radius, color_name, thickness);
                             drawnshapes_and_all_count(shapeStr);
@@ -1654,10 +1644,10 @@ namespace {
                         }
                     }
                     else if (shapeStr == "Hexahedron") {
-                        double radius = fields[1].toDouble();
-                        std::string color_name = fields.value(6).toStdString();
-                        double thickness = fields[7].toDouble();
-                        std::string is_deleted = fields.value(8).toStdString();
+                        double radius = fields[5].toDouble();
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
                             Draw_Hexahedron(radius, color_name, thickness);
                             drawnshapes_and_all_count(shapeStr);
@@ -1665,11 +1655,11 @@ namespace {
                         }
                     }
                     else if (shapeStr == "Regular Polygon") {
-                        double radius = fields[1].toDouble();
-                        int no_of_sides = fields[5].toInt();
-                        std::string color_name = fields.value(6).toStdString();
-                        double thickness = fields[7].toDouble();
-                        std::string is_deleted = fields.value(8).toStdString();
+                        double radius = fields[5].toDouble();
+                        int no_of_sides = fields[9].toInt();
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
                             Draw_Regular_Polygon(radius, no_of_sides, color_name, thickness);
                             drawnshapes_and_all_count(shapeStr);
@@ -1677,10 +1667,10 @@ namespace {
                         }
                     }
                     else if (shapeStr == "Square") {
-                        double radius = fields[1].toDouble();
-                        std::string color_name = fields.value(6).toStdString();
-                        double thickness = fields[7].toDouble();
-                        std::string is_deleted = fields.value(8).toStdString();
+                        double radius = fields[5].toDouble();
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
                             Draw_Square(radius, color_name, thickness);
                             drawnshapes_and_all_count(shapeStr);
@@ -1688,11 +1678,11 @@ namespace {
                         }
                     }
                     else if (shapeStr == "Cylinder") {
-                        double radius = fields[1].toDouble();
-                        double cylinder_height = fields[4].toDouble();
-                        std::string color_name = fields.value(6).toStdString();
-                        double thickness = fields[7].toDouble();
-                        std::string is_deleted = fields.value(8).toStdString();
+                        double radius = fields[5].toDouble();
+                        double cylinder_height = fields[8].toDouble();
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
                             Draw_Cylinder(radius, cylinder_height, color_name, thickness);
                             drawnshapes_and_all_count(shapeStr);
@@ -1700,11 +1690,11 @@ namespace {
                         }
                     }
                     else if (shapeStr == "Ellipse") {
-                        double major_axis = fields[2].toDouble();
-                        double minor_axis = fields[3].toDouble();
-                        std::string color_name = fields.value(6).toStdString();
-                        double thickness = fields[7].toDouble();
-                        std::string is_deleted = fields.value(8).toStdString();
+                        double major_axis = fields[6].toDouble();
+                        double minor_axis = fields[7].toDouble();
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
                             Draw_Ellipse(major_axis, minor_axis, color_name, thickness);
                             drawnshapes_and_all_count(shapeStr);
@@ -1712,10 +1702,10 @@ namespace {
                         }
                     }
                     else if (shapeStr == "Star") {
-                        double radius = fields[1].toDouble();
-                        std::string color_name = fields.value(6).toStdString();
-                        double thickness = fields[7].toDouble();
-                        std::string is_deleted = fields.value(8).toStdString();
+                        double radius = fields[5].toDouble();
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
                             Draw_Star(radius, color_name, thickness);
                             drawnshapes_and_all_count(shapeStr);
@@ -1723,13 +1713,13 @@ namespace {
                         }
                     }
                     else if (shapeStr == "Line") {
-                        /*double x1 = fields[1].toDouble();
+                        double x1 = fields[1].toDouble();
                         double y1 = fields[2].toDouble();
                         double x2 = fields[3].toDouble();
                         double y2 = fields[4].toDouble();
-                        std::string color_name = fields.value(2).toStdString();
-                        double thickness = fields[6].toDouble();
-                        Draw_Line(x1, y1, x2, y2, color_name, thickness);*/
+                        std::string color_name = fields.value(10).toStdString();
+                        double thickness = fields[11].toDouble();
+                        Draw_Line(x1, y1, x2, y2, color_name, thickness);
                     }
                     else {
                         qDebug() << "Unknown shape: " << shape;
@@ -1762,6 +1752,15 @@ namespace {
             messageBox.exec();
             QString buttonText = messageBox.clickedButton()->text();
             thickness_mode = buttonText.toStdString();
+            vtkNew<MouseInteractorStyleDrawLine> style;
+            //style->setShapeName(shape_name);
+            style->setDrawFlag(false);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             if (thickness_mode == "Last shape drawn") {
                 if (shape_name == "Circle") {
                     updatethickness_2(actor_circle, thickness);
@@ -1864,6 +1863,15 @@ namespace {
             }
         }
         else {
+            vtkNew<MouseInteractorStyleDrawLine> style;
+            //style->setShapeName(shape_name);
+            style->setDrawFlag(false);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             if (shape_name == "Circle") {
                 updatethickness_2(actor_circle, thickness);
             }
@@ -1917,6 +1925,8 @@ namespace {
     {
         std::string shape_name = comboBox->currentText().toStdString();
         vtkNew<MouseInteractorStyleDrawLine> style;
+        style->setShapeName(shape_name);
+        style->setDrawFlag(true);
         if (shape_name == "Circle")
         {
             bool ok;
@@ -1924,7 +1934,14 @@ namespace {
             if (!ok) {
                 return;
             }
-            Draw_circle(Radius_Circle, "Red", 1.0);
+
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+            // Set the custom interactor style
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
             add_shape_list(shape_name, shapeListWidget);
         }
@@ -1934,7 +1951,13 @@ namespace {
             if (!ok) {
                 return;
             }
-            Draw_Football(Radius_Sphere, "Red", 1.0);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+            // Set the custom interactor style
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
             add_shape_list(shape_name, shapeListWidget);
         }
@@ -1945,7 +1968,13 @@ namespace {
             if (!ok) {
                 return;
             }
-            Draw_Arc(Radius_Arc, "Red", 1.0);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+            // Set the custom interactor style
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
             add_shape_list(shape_name, shapeListWidget);
         }
@@ -1956,7 +1985,13 @@ namespace {
             if (!ok) {
                 return;
             }
-            Draw_Hexahedron(Radius_Hexahedron, "Red", 1.0);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+            // Set the custom interactor style
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
             add_shape_list(shape_name, shapeListWidget);
         }
@@ -1996,8 +2031,7 @@ namespace {
                 // Set the custom interactor style
                 style->SetRenderer(renderer);
 
-                style->setFlag(true);
-                style->setPolyFlag(false);
+
                 style->setPolygonFlag(false);
                 renderWindowInteractor->SetInteractorStyle(style.Get());
             }
@@ -2010,8 +2044,7 @@ namespace {
             renderWindowInteractor->SetRenderWindow(window);
             // Set the custom interactor style
             style->SetRenderer(renderer);
-            style->setFlag(false);
-            style->setPolyFlag(true);
+
             style->setPolygonFlag(false);
             renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
@@ -2022,9 +2055,7 @@ namespace {
             renderWindowInteractor->SetRenderWindow(window);
             // Set the custom interactor style
             style->SetRenderer(renderer);
-            style->setFlag(false);
-            style->setPolyFlag(false);
-            style->setPolygonFlag(true);
+
             renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
             add_shape_list(shape_name, shapeListWidget);
@@ -2040,10 +2071,17 @@ namespace {
             if (!ok) {
                 return;
             }
-            Draw_Regular_Polygon(Radius_Reg_Polygon, NO_POINTS, "Red", 1.0);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+            // Set the custom interactor style
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
             add_shape_list(shape_name, shapeListWidget);
         }
+
         else if (shape_name == "Cylinder") {
             bool ok;
             Radius_Cylinder = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Cylinder:", 0.0, -100.0, 100.0, 2, &ok);
@@ -2054,7 +2092,13 @@ namespace {
             if (!ok) {
                 return;
             }
-            Draw_Cylinder(Radius_Cylinder, Height_Cylinder, "Red", 1.0);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+            // Set the custom interactor style
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             drawnshapes_and_all_count(shape_name);
             add_shape_list(shape_name, shapeListWidget);
         }
@@ -2068,41 +2112,49 @@ namespace {
             if (!ok) {
                 return;
             }
-            Draw_Ellipse(MAJOR_AXIS, MINOR_AXIS, "Red", 1.0);
-            drawnshapes_and_all_count(shape_name);
-            add_shape_list(shape_name, shapeListWidget);
-        }
-        else if (shape_name == "Square") {
-            bool ok;
-            Radius_Square = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Square:", 0.0, -100.0, 100.0, 2, &ok);
-            if (!ok) {
-                return;
-            }
-            Draw_Square(Radius_Square, "Red", 1.0);
-            drawnshapes_and_all_count(shape_name);
-            add_shape_list(shape_name, shapeListWidget);
-        }
-        else if (shape_name == "Star") {
-            bool ok;
-            Radius_Star = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Star:", 0.0, -100.0, 100.0, 2, &ok);
-            if (!ok) {
-                return;
-            }
-            Draw_Star(Radius_Star, "Red", 1.0);
-            drawnshapes_and_all_count(shape_name);
-            add_shape_list(shape_name, shapeListWidget);
-        }
-        if (shape_name != "Polyline" && shape_name != "Line" && shape_name != "Polygon") {
             vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
             renderWindowInteractor->SetRenderWindow(window);
             // Set the custom interactor style
 
             style->SetRenderer(renderer);
 
-            style->setFlag(false);
-            style->setPolyFlag(false);
-            style->setPolygonFlag(false);
             renderWindowInteractor->SetInteractorStyle(style.Get());
+            drawnshapes_and_all_count(shape_name);
+            add_shape_list(shape_name, shapeListWidget);
+        }
+
+        else if (shape_name == "Square") {
+            bool ok;
+            Radius_Square = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Square:", 0.0, -100.0, 100.0, 2, &ok);
+            if (!ok) {
+                return;
+            }
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+            // Set the custom interactor style
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
+            drawnshapes_and_all_count(shape_name);
+            add_shape_list(shape_name, shapeListWidget);
+        }
+
+        else if (shape_name == "Star") {
+            bool ok;
+            Radius_Star = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the Star:", 0.0, -100.0, 100.0, 2, &ok);
+            if (!ok) {
+                return;
+            }
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+            // Set the custom interactor style
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
+            drawnshapes_and_all_count(shape_name);
+            add_shape_list(shape_name, shapeListWidget);
         }
         window->Render();
     }
@@ -2131,6 +2183,15 @@ namespace {
 
     void Delete(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
         QString shape_name = comboBox->currentText();
+        vtkNew<MouseInteractorStyleDrawLine> style;
+        //style->setShapeName(shape_name);
+        style->setDrawFlag(false);
+        vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+        renderWindowInteractor->SetRenderWindow(window);
+
+        style->SetRenderer(renderer);
+
+        renderWindowInteractor->SetInteractorStyle(style.Get());
         if (count_shapes == 1) {
             delete_all_shapes();
             count_shapes = 0;
@@ -2418,7 +2479,6 @@ namespace {
             // Set the new coordinates for the transformed point
             points->SetPoint(i, Qx, Qy, point[2]);
         }
-
         // Update the source to reflect the transformed points
         temp_source->SetPoints(points);
         temp_source->Modified(); // Mark the source as modified
@@ -2435,6 +2495,8 @@ namespace {
             if (!ok) {
                 return;
             }
+
+
             if (shape_name == "Circle") {
                 Translation(circle_Source, mapper_circle, m13, m23);
             }
@@ -2801,6 +2863,18 @@ namespace {
             messageBox.exec();
             QString buttonText = messageBox.clickedButton()->text();
             transform_mode = buttonText.toStdString();
+            ///////////
+            vtkNew<MouseInteractorStyleDrawLine> style;
+            //style->setShapeName(shape_name);
+            style->setDrawFlag(false);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
+            // Set the custom interactor style
+            /////////////////
             if (transform_mode == "Last shape drawn") {
                 transform_modes(transform_state, shape_name);
             }
@@ -2882,6 +2956,15 @@ namespace {
             }
         }
         else {
+            vtkNew<MouseInteractorStyleDrawLine> style;
+            //style->setShapeName(shape_name);
+            style->setDrawFlag(false);
+            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+            renderWindowInteractor->SetRenderWindow(window);
+
+            style->SetRenderer(renderer);
+
+            renderWindowInteractor->SetInteractorStyle(style.Get());
             transform_modes(transform_state, shape_name);
         }
         window->Render();
