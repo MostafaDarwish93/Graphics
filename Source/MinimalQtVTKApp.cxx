@@ -879,17 +879,15 @@ namespace {
 
     void DrawLine(vtkSmartPointer<vtkPoints> points) {
 
-
+        ///// Point 1  //////
         lineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
-        lineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
-
-        ///// Get X and Y of both points ////////////
         double* point1 = points->GetPoint(points->GetNumberOfPoints() - 2);
-        double* point2 = points->GetPoint(points->GetNumberOfPoints() - 1);
-
         x1_line = floor(point1[0] * 100) / 100;
         y1_line = floor(point1[1] * 100) / 100;
 
+        ///// Point 2  //////
+        lineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
+        double* point2 = points->GetPoint(points->GetNumberOfPoints() - 1);
         x2_line = floor(point2[0] * 100) / 100;
         y2_line = floor(point2[1] * 100) / 100;
 
