@@ -48,9 +48,13 @@
 #include <QSpinBox>
 #include <QTextEdit>
 #include <QListWidget>
+#include <stack>
 using namespace std;
 
 vtkNew<vtkRenderer> renderer;
+std::stack<vtkSmartPointer<vtkLineSource>> deleted_sources;
+std::stack<vtkSmartPointer<vtkActor>> deleted_actors;
+std::stack<std::string> drawn_shapes;
 
 // Actor, Source, Mapper    FOR  Line
 vtkSmartPointer<vtkActor> actor = vtkSmartPointer<vtkActor>::New();
@@ -118,12 +122,16 @@ double Radius_Hexahedron;
 double Radius_Square;
 double Radius_Star;
 double Radius_Rosette;
+double center_x;
+double center_y;
 bool Line_Poly;
 bool Poly_Line = 0;
 double picked[3]; // Declares an array of 3 doubles called "picked"
 string mode_line;
+string mode_circle;
 string delete_mode;
 string color_mode = "One Shape";
+string shearing_direc_mode;
 string transform_mode;
 string thickness_mode;
 double x1_line;
@@ -172,10 +180,9 @@ namespace {
 
     void DrawPolygon(vtkSmartPointer<vtkPoints> points);
 
-    void Draw_circle(double radius, string color, int thickness);
+    void Draw_circle(double radius, string color, int thickness, double center_x, double center_y);
 
     void Draw_Ellipse(double x_axis, double y_axis, string color, int thickness);
-
 
     void Draw_Arc(double radius, string color, int thickness);
 
@@ -205,6 +212,10 @@ namespace {
 
     void Load(QComboBox* comboBox);
 
+    void Undo(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window);
+
+    void Redo(vtkGenericOpenGLRenderWindow* window);
+
     void Add_shape_list(QComboBox* shapeListComboBox);
 } // namespace
 
@@ -227,12 +238,12 @@ namespace {
         {
 
             this->Picker->Pick(this->Interactor->GetEventPosition()[0], this->Interactor->GetEventPosition()[1], 0, this->Renderer);
-            double point[3];
-            this->Picker->GetPickPosition(point);
-            std::cout << "Point: " << point[0] << ", " << point[1] << ", " << point[2] << std::endl;
+            double picked[3];
+            this->Picker->GetPickPosition(picked);
+
             // Add a text actor to show the clicked point
             vtkSmartPointer<vtkTextActor> textActor = vtkSmartPointer<vtkTextActor>::New();
-            std::string text = "Point: (" + std::to_string(point[0]) + ", " + std::to_string(point[1]) + ") ";// +std::to_string(point[2]) + ")";
+            std::string text = "Point: (" + std::to_string(picked[0]) + ", " + std::to_string(picked[1]) + ") ";// +std::to_string(point[2]) + ")";
             textActor->SetInput(text.c_str());
             textActor->SetDisplayPosition(this->Interactor->GetEventPosition()[0], this->Interactor->GetEventPosition()[1]);
             vtkPropCollection* actors = renderer->GetViewProps();
@@ -245,7 +256,7 @@ namespace {
                 }
             }
             renderer->AddActor2D(textActor);
-            this->Points->InsertNextPoint(point);
+            this->Points->InsertNextPoint(picked);
             if (this->Drawflag) {
                 // Draw the line
                 if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Line")
@@ -253,14 +264,20 @@ namespace {
                     DrawLine(this->Points);
                 }
                 else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polyline" && this->Points->GetNumberOfPoints() <= 3) {
-
                     DrawPolyLine(this->Points);
                 }
                 else if (this->Points->GetNumberOfPoints() > 2 && this->ShapeName == "Polygon" && this->Points->GetNumberOfPoints() <= 3) {
                     DrawPolygon(this->Points);
                 }
-                else if (this->ShapeName == "Circle") {
-                    Draw_circle(Radius_Circle, "Red", 1.0);
+                else if (this->Points->GetNumberOfPoints() == 2 && this->ShapeName == "Circle") {
+                    // Calculate the radius of the circle using the picked point and the previous point
+                    double picked2[3];
+                    this->Points->GetPoint(0, picked2);
+                    center_x = picked2[0];
+                    center_y = picked2[1];
+                    this->Points->GetPoint(1, picked2);
+                    Radius_Circle = sqrt(pow((picked2[0] - center_x), 2.0) + pow(picked2[1] - center_y, 2.0));
+                    Draw_circle(Radius_Circle, "Red", 1.0, center_x, center_y);
                 }
                 else if (this->ShapeName == "Sphere") {
                     Draw_Football(Radius_Sphere, "Red", 1.0);
@@ -442,6 +459,16 @@ int main(int argc, char* argv[])
     transform_list->setCurrentIndex(0); // Set default value
     dockLayout->addWidget(transform_list);
 
+    // Undo Button
+    QPushButton undo_button;
+    undo_button.setText("Undo");
+    dockLayout->addWidget(&undo_button);
+
+    // Undo Button
+    QPushButton redo_button;
+    redo_button.setText("Redo");
+    dockLayout->addWidget(&redo_button);
+
     // shape list dock
     // Initialize an empty QListWidget to store the drawn shapes
     QListWidget shapeListWidget;
@@ -503,6 +530,14 @@ int main(int argc, char* argv[])
     QObject::connect(trasform_button, &QPushButton::clicked,
         [=, &transform_list, &window]() { Transform(transform_list, window, shapesdroplist); });
 
+    // Connect undo button
+    QObject::connect(&undo_button, &QPushButton::released,
+        [&]() {  ::Undo(shapesdroplist, window); });
+
+    // Connect redo button
+    QObject::connect(&redo_button, &QPushButton::released,
+        [&]() {  ::Redo(window); });
+
     mainWindow.show();
 
     return app.exec();
@@ -534,7 +569,7 @@ namespace {
         temp_actor->GetProperty()->SetLineWidth(thickness);
     }
 
-    void Draw_circle(double radius, string color, int thickness)
+    void Draw_circle(double radius, string color, int thickness, double center_x, double center_y)
     {
         double R = radius; // Radius of the circle
         int numPoints = 100; // Number of points to approximate the circle
@@ -546,8 +581,8 @@ namespace {
         for (int i = 0; i <= numPoints; i++)
         {
             double t = static_cast<double>(i) / numPoints;
-            double x = R * cos(2 * vtkMath::Pi() * t);
-            double y = R * sin(2 * vtkMath::Pi() * t);
+            double x = center_x + R * cos(2 * vtkMath::Pi() * t);
+            double y = center_y + R * sin(2 * vtkMath::Pi() * t);
             points->InsertNextPoint(x, y, 0.0); // Insert points on the circle
         }
         circle_Source->SetPoints(points);
@@ -1507,7 +1542,7 @@ namespace {
                     if (shape == "Circle") {
                         iss >> check_blank >> check_blank >> check_blank >> check_blank >> radius >> check_blank >> check_blank >> check_blank >> check_blank >> color_name >> thickness >> is_deleted;
                         if (is_deleted == "No") {
-                            Draw_circle(radius, color_name, thickness);
+                            Draw_circle(radius, color_name, thickness, 0, 0);
                             drawnshapes_and_all_count(shape);
                             comboBox->setCurrentText("Circle");
                         }
@@ -1614,7 +1649,7 @@ namespace {
                         double thickness = fields[11].toDouble();
                         std::string is_deleted = fields.value(12).toStdString();
                         if (is_deleted == "No") {
-                            Draw_circle(radius, color_name, thickness);
+                            Draw_circle(radius, color_name, thickness, 0, 0);
                             drawnshapes_and_all_count(shapeStr);
                             comboBox->setCurrentText("Circle");
                         }
@@ -1922,24 +1957,37 @@ namespace {
     void Change_Shapes(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window, QListWidget& shapeListWidget)
     {
         std::string shape_name = comboBox->currentText().toStdString();
+        drawn_shapes.push(shape_name); // Add the shape name to the stack
         vtkNew<MouseInteractorStyleDrawLine> style;
         style->setShapeName(shape_name);
         style->setDrawFlag(true);
         if (shape_name == "Circle")
         {
-            bool ok;
-            Radius_Circle = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the circle:", 0.0, -100.0, 100.0, 2, &ok);
-            if (!ok) {
-                return;
+            // Ask user for filled or non-filled region
+            QMessageBox messageBox;
+            messageBox.setText("Choose Drawning Style");
+            QAbstractButton* button = messageBox.addButton(QMessageBox::tr("Mouse Click"), QMessageBox::YesRole);
+            QAbstractButton* button_1 = messageBox.addButton(QMessageBox::tr("Enter points"), QMessageBox::YesRole);
+            messageBox.exec();
+            QString buttonText = messageBox.clickedButton()->text();
+            mode_circle = buttonText.toStdString();
+            if (mode_circle == "Enter points") {
+                bool ok;
+                Radius_Circle = QInputDialog::getDouble(nullptr, "Enter Radius", "Enter the radius of the circle:", 0.0, -100.0, 100.0, 2, &ok);
+                if (!ok) {
+                    return;
+                }
+                Draw_circle(Radius_Circle, "Red", 1.0, 0, 0);
             }
+            else {
+                vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
+                renderWindowInteractor->SetRenderWindow(window);
+                // Set the custom interactor style
 
-            vtkNew<vtkRenderWindowInteractor> renderWindowInteractor;
-            renderWindowInteractor->SetRenderWindow(window);
-            // Set the custom interactor style
+                style->SetRenderer(renderer);
 
-            style->SetRenderer(renderer);
-
-            renderWindowInteractor->SetInteractorStyle(style.Get());
+                renderWindowInteractor->SetInteractorStyle(style.Get());
+            }
             drawnshapes_and_all_count(shape_name);
             add_shape_list(shape_name, shapeListWidget);
         }
@@ -2164,6 +2212,10 @@ namespace {
         vtkSmartPointer<vtkPoints> emptyPoints = vtkSmartPointer<vtkPoints>::New();
         temp_Source->SetPoints(emptyPoints);
         count_shapes--;
+
+        // Add the deleted shape to the stack
+        deleted_sources.push(temp_Source);
+        deleted_actors.push(temp_actor);
     }
 
     void delete_all_shapes() {
@@ -2197,102 +2249,12 @@ namespace {
         else {
             QMessageBox messageBox;
             messageBox.setText("Choose which one you want to delete");
-            messageBox.addButton(QMessageBox::tr("Last shape drawn"), QMessageBox::YesRole);
             messageBox.addButton(QMessageBox::tr("All the Shapes"), QMessageBox::YesRole);
             messageBox.addButton(QMessageBox::tr("Specific shape"), QMessageBox::YesRole);
             messageBox.exec();
             QString buttonText = messageBox.clickedButton()->text();
             delete_mode = buttonText.toStdString();
-            if (delete_mode == "Last shape drawn") {
-                if (shape_name == "Circle") {
-                    double* color = actor_circle->GetProperty()->GetColor();
-                    Color_Circle = specify_color(color);
-                    delete_shape(circle_Source, actor_circle);
-                    drawnShapes.erase("Circle");
-                    circle_deleted = true;
-                }
-                else if (shape_name == "Line") {
-                    double* color = actor->GetProperty()->GetColor();
-                    Color_Line = specify_color(color);
-                    delete_shape(lineSource, actor);
-                    drawnShapes.erase("Line");
-                    line_deleted = true;
-                }
-                else if (shape_name == "Ellipse") {
-                    double* color = actor_Ellipse->GetProperty()->GetColor();
-                    Color_Ellipse = specify_color(color);
-                    delete_shape(Ellipse_Source, actor_Ellipse);
-                    drawnShapes.erase("Ellipse");
-                    ellipse_deleted = true;
-                }
-                else if (shape_name == "Arc") {
-                    double* color = actor_Arc->GetProperty()->GetColor();
-                    Color_Arc = specify_color(color);
-                    delete_shape(Arc_Source, actor_Arc);
-                    drawnShapes.erase("Arc");
-                    Arc_deleted = true;
-                }
-                else if (shape_name == "Sphere") {
-                    double* color = actor_Football->GetProperty()->GetColor();
-                    Color_Sphere = specify_color(color);
-                    delete_shape(Football_Source, actor_Football);
-                    drawnShapes.erase("Sphere");
-                    Sphere_deleted = true;
-                }
-                else if (shape_name == "Hexahedron") {
-                    double* color = actor_Hexahedron->GetProperty()->GetColor();
-                    Color_Hexahedron = specify_color(color);
-                    delete_shape(Hexahedron_Source, actor_Hexahedron);
-                    drawnShapes.erase("Hexahedron");
-                    Hexahedron_deleted = true;
-                }
-                else if (shape_name == "Regular Polygon") {
-                    double* color = actor_Regular_Polygon->GetProperty()->GetColor();
-                    Color_Regular_Polygon = specify_color(color);
-                    delete_shape(Regular_Polygon_Source, actor_Regular_Polygon);
-                    drawnShapes.erase("Regular Polygon");
-                    Regular_Polygon_deleted = true;
-                }
-                else if (shape_name == "Cylinder") {
-                    double* color = actor_Cylinder->GetProperty()->GetColor();
-                    Color_Cylinder = specify_color(color);
-                    delete_shape(Cylinder_Source, actor_Cylinder);
-                    drawnShapes.erase("Cylinder");
-                    Cylinder_deleted = true;
-                }
-                else if (shape_name == "Square") {
-                    double* color = actor_Square->GetProperty()->GetColor();
-                    Color_Square = specify_color(color);
-                    delete_shape(Square_Source, actor_Square);
-                    drawnShapes.erase("Square");
-                    Square_deleted = true;
-                }
-                else if (shape_name == "Star") {
-                    double* color = actor_Star->GetProperty()->GetColor();
-                    Color_Star = specify_color(color);
-                    delete_shape(Star_Source, actor_Star);
-                    drawnShapes.erase("Star");
-                    Star_deleted = true;
-                }
-                else if (shape_name == "Polyline") {
-                    double* color = PolyLine_actor->GetProperty()->GetColor();
-                    Color_PolyLine = specify_color(color);
-                    delete_shape(PolyLine_Source, PolyLine_actor);
-                    drawnShapes.erase("Polyline");
-                    polyline_deleted = true;
-                }
-                else if (shape_name == "Polygon") {
-                    double* color = Polygon_actor->GetProperty()->GetColor();
-                    Color_Polygon = specify_color(color);
-                    delete_shape(Polygon_Source, Polygon_actor);
-                    drawnShapes.erase("Polygon");
-                    Polygon_deleted = true;
-                }
-                else {
-                    return;
-                }
-            }
-            else if (delete_mode == "All the Shapes") {
+            if (delete_mode == "All the Shapes") {
                 delete_all_shapes();
                 all_deleted = true;
                 count_shapes = 0;
@@ -2459,23 +2421,41 @@ namespace {
         temp_mapper->Update();
     }
 
-    void Shearing(vtkLineSource* temp_source, double h) {
+    void Shearing(vtkLineSource* temp_source, double h, string shearing_direc) {
         // Get the current coordinates of the points in the source
         vtkSmartPointer<vtkPoints> points = temp_source->GetPoints();
 
-        // Apply the shearing transformation to each point
-        for (vtkIdType i = 0; i < points->GetNumberOfPoints(); ++i) {
-            double point[3];
-            points->GetPoint(i, point);
-            double Px = point[0];
-            double Py = point[1];
+        if (shearing_direc == "x-axis") {
+            // Apply the shearing transformation to each point
+            for (vtkIdType i = 0; i < points->GetNumberOfPoints(); ++i) {
+                double point[3];
+                points->GetPoint(i, point);
+                double Px = point[0];
+                double Py = point[1];
 
-            // Apply the shearing equation
-            double Qx = Px + h * Py;
-            double Qy = Py;
+                // Apply the shearing equation
+                double Qx = Px + h * Py;
+                double Qy = Py;
 
-            // Set the new coordinates for the transformed point
-            points->SetPoint(i, Qx, Qy, point[2]);
+                // Set the new coordinates for the transformed point
+                points->SetPoint(i, Qx, Qy, point[2]);
+            }
+        }
+        else {
+            // Apply the shearing transformation to each point
+            for (vtkIdType i = 0; i < points->GetNumberOfPoints(); ++i) {
+                double point[3];
+                points->GetPoint(i, point);
+                double Px = point[0];
+                double Py = point[1];
+
+                // Apply the shearing equation
+                double Qx = Px;
+                double Qy = Py + h * Px;
+
+                // Set the new coordinates for the transformed point
+                points->SetPoint(i, Qx, Qy, point[2]);
+            }
         }
         // Update the source to reflect the transformed points
         temp_source->SetPoints(points);
@@ -2634,46 +2614,53 @@ namespace {
             }
         }
         else if (transform_state == "Shearing") {
+            QMessageBox messageBox;
+            messageBox.setText("Choose which shape you want to color");
+            messageBox.addButton(QMessageBox::tr("x-axis"), QMessageBox::YesRole);
+            messageBox.addButton(QMessageBox::tr("y-axis"), QMessageBox::YesRole);
+            messageBox.exec();
+            QString shearing_direc = messageBox.clickedButton()->text();
+            shearing_direc_mode = shearing_direc.toStdString();
             bool ok;
             double h = QInputDialog::getDouble(nullptr, "Enter the shearing factor", "Enter the factor of Shearing:", 0.0, -100.0, 360, 2, &ok);
             if (!ok) {
                 return;
             }  // Specify the desired shearing factor
             if (shape_name == "Circle") {
-                Shearing(circle_Source, h);
+                Shearing(circle_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Line") {
-                Shearing(lineSource, h);
+                Shearing(lineSource, h, shearing_direc_mode);
             }
             else if (shape_name == "Ellipse") {
-                Shearing(Ellipse_Source, h);
+                Shearing(Ellipse_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Arc") {
-                Shearing(Arc_Source, h);
+                Shearing(Arc_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Sphere") {
-                Shearing(Football_Source, h);
+                Shearing(Football_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Hexahedron") {
-                Shearing(Hexahedron_Source, h);
+                Shearing(Hexahedron_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Regular Polygon") {
-                Shearing(Regular_Polygon_Source, h);
+                Shearing(Regular_Polygon_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Cylinder") {
-                Shearing(Cylinder_Source, h);
+                Shearing(Cylinder_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Square") {
-                Shearing(Square_Source, h);
+                Shearing(Square_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Star") {
-                Shearing(Star_Source, h);
+                Shearing(Star_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Polyline") {
-                Shearing(PolyLine_Source, h);
+                Shearing(PolyLine_Source, h, shearing_direc_mode);
             }
             else if (shape_name == "Polygon") {
-                Shearing(Polygon_Source, h);
+                Shearing(Polygon_Source, h, shearing_direc_mode);
             }
             else {
                 return;
@@ -2807,42 +2794,42 @@ namespace {
         }
     }
 
-    void Shearing_all_shapes(vtkSmartPointer<vtkActor> tempactor, double h) {
+    void Shearing_all_shapes(vtkSmartPointer<vtkActor> tempactor, double h, string shearing_direc) {
         if (tempactor == actor) {
-            Shearing(lineSource, h);
+            Shearing(lineSource, h, shearing_direc);
         }
         else if (tempactor == actor_circle) {
-            Shearing(circle_Source, h);
+            Shearing(circle_Source, h, shearing_direc);
         }
         else if (tempactor == actor_Arc) {
-            Shearing(Arc_Source, h);
+            Shearing(Arc_Source, h, shearing_direc);
         }
         else if (tempactor == actor_Cylinder) {
-            Shearing(Cylinder_Source, h);
+            Shearing(Cylinder_Source, h, shearing_direc);
         }
         else if (tempactor == actor_Ellipse) {
-            Shearing(Ellipse_Source, h);
+            Shearing(Ellipse_Source, h, shearing_direc);
         }
         else if (tempactor == actor_Football) {
-            Shearing(Football_Source, h);
+            Shearing(Football_Source, h, shearing_direc);
         }
         else if (tempactor == actor_Hexahedron) {
-            Shearing(Hexahedron_Source, h);
+            Shearing(Hexahedron_Source, h, shearing_direc);
         }
         else if (tempactor == actor_Regular_Polygon) {
-            Shearing(Regular_Polygon_Source, h);
+            Shearing(Regular_Polygon_Source, h, shearing_direc);
         }
         else if (tempactor == actor_Square) {
-            Shearing(Square_Source, h);
+            Shearing(Square_Source, h, shearing_direc);
         }
         else if (tempactor == actor_Star) {
-            Shearing(Star_Source, h);
+            Shearing(Star_Source, h, shearing_direc);
         }
         else if (tempactor == Polygon_actor) {
-            Shearing(Polygon_Source, h);
+            Shearing(Polygon_Source, h, shearing_direc);
         }
         else if (tempactor == PolyLine_actor) {
-            Shearing(PolyLine_Source, h);
+            Shearing(PolyLine_Source, h, shearing_direc);
         }
         else {
             return;
@@ -2872,7 +2859,6 @@ namespace {
 
             renderWindowInteractor->SetInteractorStyle(style.Get());
             // Set the custom interactor style
-            /////////////////
             if (transform_mode == "Last shape drawn") {
                 transform_modes(transform_state, shape_name);
             }
@@ -2928,6 +2914,13 @@ namespace {
                 }
                 else if (transform_state == "Shearing") {
                     bool ok;
+                    QMessageBox messageBox;
+                    messageBox.setText("Choose which shape you want to color");
+                    messageBox.addButton(QMessageBox::tr("x-axis"), QMessageBox::YesRole);
+                    messageBox.addButton(QMessageBox::tr("y-axis"), QMessageBox::YesRole);
+                    messageBox.exec();
+                    QString shearing_direc = messageBox.clickedButton()->text();
+                    shearing_direc_mode = shearing_direc.toStdString();
                     double h = QInputDialog::getDouble(nullptr, "Enter the shearing factor", "Enter the factor of Shearing:", 0.0, -100.0, 360, 2, &ok);
                     if (!ok) {
                         return;
@@ -2936,7 +2929,7 @@ namespace {
                     actors->InitTraversal(); // Initialize the actors traversal
                     vtkActor* actor_all = nullptr;
                     while ((actor_all = actors->GetNextActor()) != nullptr) {
-                        Shearing_all_shapes(actor_all, h);
+                        Shearing_all_shapes(actor_all, h, shearing_direc_mode);
                     }
                 }
             }
@@ -2965,6 +2958,118 @@ namespace {
             renderWindowInteractor->SetInteractorStyle(style.Get());
             transform_modes(transform_state, shape_name);
         }
+        window->Render();
+    }
+
+    void Undo(QComboBox* comboBox, vtkGenericOpenGLRenderWindow* window) {
+        //QString shape_name = comboBox->currentText();
+        string shape_name = drawn_shapes.top(); // Get the top shape name from the stack
+        drawn_shapes.pop(); // Remove the top shape name from the stack
+        if (shape_name == "Circle") {
+            double* color = actor_circle->GetProperty()->GetColor();
+            Color_Circle = specify_color(color);
+            delete_shape(circle_Source, actor_circle);
+            drawnShapes.erase("Circle");
+            circle_deleted = true;
+        }
+        else if (shape_name == "Line") {
+            double* color = actor->GetProperty()->GetColor();
+            Color_Line = specify_color(color);
+            delete_shape(lineSource, actor);
+            drawnShapes.erase("Line");
+            line_deleted = true;
+        }
+        else if (shape_name == "Ellipse") {
+            double* color = actor_Ellipse->GetProperty()->GetColor();
+            Color_Ellipse = specify_color(color);
+            delete_shape(Ellipse_Source, actor_Ellipse);
+            drawnShapes.erase("Ellipse");
+            ellipse_deleted = true;
+        }
+        else if (shape_name == "Arc") {
+            double* color = actor_Arc->GetProperty()->GetColor();
+            Color_Arc = specify_color(color);
+            delete_shape(Arc_Source, actor_Arc);
+            drawnShapes.erase("Arc");
+            Arc_deleted = true;
+        }
+        else if (shape_name == "Sphere") {
+            double* color = actor_Football->GetProperty()->GetColor();
+            Color_Sphere = specify_color(color);
+            delete_shape(Football_Source, actor_Football);
+            drawnShapes.erase("Sphere");
+            Sphere_deleted = true;
+        }
+        else if (shape_name == "Hexahedron") {
+            double* color = actor_Hexahedron->GetProperty()->GetColor();
+            Color_Hexahedron = specify_color(color);
+            delete_shape(Hexahedron_Source, actor_Hexahedron);
+            drawnShapes.erase("Hexahedron");
+            Hexahedron_deleted = true;
+        }
+        else if (shape_name == "Regular Polygon") {
+            double* color = actor_Regular_Polygon->GetProperty()->GetColor();
+            Color_Regular_Polygon = specify_color(color);
+            delete_shape(Regular_Polygon_Source, actor_Regular_Polygon);
+            drawnShapes.erase("Regular Polygon");
+            Regular_Polygon_deleted = true;
+        }
+        else if (shape_name == "Cylinder") {
+            double* color = actor_Cylinder->GetProperty()->GetColor();
+            Color_Cylinder = specify_color(color);
+            delete_shape(Cylinder_Source, actor_Cylinder);
+            drawnShapes.erase("Cylinder");
+            Cylinder_deleted = true;
+        }
+        else if (shape_name == "Square") {
+            double* color = actor_Square->GetProperty()->GetColor();
+            Color_Square = specify_color(color);
+            delete_shape(Square_Source, actor_Square);
+            drawnShapes.erase("Square");
+            Square_deleted = true;
+        }
+        else if (shape_name == "Star") {
+            double* color = actor_Star->GetProperty()->GetColor();
+            Color_Star = specify_color(color);
+            delete_shape(Star_Source, actor_Star);
+            drawnShapes.erase("Star");
+            Star_deleted = true;
+        }
+        else if (shape_name == "Polyline") {
+            double* color = PolyLine_actor->GetProperty()->GetColor();
+            Color_PolyLine = specify_color(color);
+            delete_shape(PolyLine_Source, PolyLine_actor);
+            drawnShapes.erase("Polyline");
+            polyline_deleted = true;
+        }
+        else if (shape_name == "Polygon") {
+            double* color = Polygon_actor->GetProperty()->GetColor();
+            Color_Polygon = specify_color(color);
+            delete_shape(Polygon_Source, Polygon_actor);
+            drawnShapes.erase("Polygon");
+            Polygon_deleted = true;
+        }
+        else {
+            return;
+        }
+        window->Render(); // Render the window to reflect the changes
+    }
+
+    void Redo(vtkGenericOpenGLRenderWindow* window) {
+        if (deleted_sources.empty() || deleted_actors.empty()) {
+            return;
+        }
+
+        vtkSmartPointer<vtkLineSource> source = deleted_sources.top();
+        vtkSmartPointer<vtkActor> actor = deleted_actors.top();
+
+        renderer->AddActor(actor);
+        renderer->AddViewProp(actor);
+        window->AddRenderer(renderer);
+
+        deleted_sources.pop();
+        deleted_actors.pop();
+
         window->Render();
     }
 } // namespace
