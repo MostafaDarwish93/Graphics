@@ -297,7 +297,7 @@ namespace {
                             this->Points->GetPoint(0, picked2);
                             center_x_sphere = picked2[0];
                             center_y_sphere = picked2[1];
-                            center_z_sphere = picked2[2]; 
+                            center_z_sphere = picked2[2];
                             this->Points->GetPoint(1, picked2);
                             double radius = sqrt(pow((picked2[0] - center_x_sphere), 2.0) + pow(picked2[1] - center_y_sphere, 2.0) + pow(picked2[2] - center_z_sphere, 2.0)); // Modified line to calculate the radius of the sphere
                             // Draw the sphere
@@ -840,64 +840,87 @@ namespace {
     }
 
     void Draw_Hexahedron(double radius_hex, string color, int thickness)
+      
     {
-        // Define the center point of the hexahedron
+        // Define the center point of the cube
         double center[3] = { 0.0, 0.0, 0.0 };
 
-        // Define the radius from the center to each vertex
-        double radius = radius_hex;
+        // Define the half side length of the cube
+        double half_side = radius_hex / 2.0;
 
-        // Calculate the coordinates of the vertices of the upper part of the hexahedron
-        double upperVertices[5][3] = { {center[0] - radius, center[1] - radius, center[2] + radius},
-                                       {center[0] - radius, center[1] + radius, center[2] + radius},
-                                       {center[0] + radius, center[1] + radius, center[2] + radius},
-                                       {center[0] + radius, center[1] - radius, center[2] + radius},
-                                       {center[0] - radius, center[1] - radius, center[2] + radius} };
-
-        // Define the coordinates of the vertices of the lower part of the hexahedron
-        double lowerVertices[5][3] = { {center[0] - radius, center[1] - radius, center[2] - radius},
-                                       {center[0] - radius, center[1] + radius, center[2] - radius},
-                                       {center[0] + radius, center[1] + radius, center[2] - radius},
-                                       {center[0] + radius, center[1] - radius, center[2] - radius},
-                                       {center[0] - radius, center[1] - radius, center[2] - radius} };
+        // Calculate the coordinates of the vertices of the cube
+        double vertices[8][3] = { {center[0] - half_side, center[1] - half_side, center[2] + half_side},
+                                  {center[0] - half_side, center[1] + half_side, center[2] + half_side},
+                                  {center[0] + half_side, center[1] + half_side, center[2] + half_side},
+                                  {center[0] + half_side, center[1] - half_side, center[2] + half_side},
+                                  {center[0] - half_side, center[1] - half_side, center[2] - half_side},
+                                  {center[0] - half_side, center[1] + half_side, center[2] - half_side},
+                                  {center[0] + half_side, center[1] + half_side, center[2] - half_side},
+                                  {center[0] + half_side, center[1] - half_side, center[2] - half_side} };
 
         vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
 
-        // Insert the vertices of the upper part of the hexahedron as points in the points array
-        for (int i = 0; i < 5; i++)
+        // Insert the vertices of the cube as points in the points array
+        for (int i = 0; i < 8; i++)
         {
-            points->InsertNextPoint(upperVertices[i]);
+            points->InsertNextPoint(vertices[i]);
         }
 
-        // Insert the vertices of the lower part of the hexahedron as points in the points array
-        for (int i = 0; i < 5; i++)
-        {
-            points->InsertNextPoint(lowerVertices[i]);
-        }
-
-        points->InsertNextPoint(upperVertices[1]);
-        points->InsertNextPoint(lowerVertices[1]);
-        points->InsertNextPoint(lowerVertices[2]);
-        points->InsertNextPoint(upperVertices[2]);
-        points->InsertNextPoint(upperVertices[3]);
-        points->InsertNextPoint(lowerVertices[3]);
-        points->InsertNextPoint(lowerVertices[4]);
-        points->InsertNextPoint(upperVertices[4]);
+        // Define the lines that connect the vertices of the cube
+        vtkSmartPointer<vtkCellArray> lines = vtkSmartPointer<vtkCellArray>::New();
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(0);
+        lines->InsertCellPoint(1);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(1);
+        lines->InsertCellPoint(2);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(2);
+        lines->InsertCellPoint(3);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(3);
+        lines->InsertCellPoint(0);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(4);
+        lines->InsertCellPoint(5);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(5);
+        lines->InsertCellPoint(6);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(6);
+        lines->InsertCellPoint(7);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(7);
+        lines->InsertCellPoint(4);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(0);
+        lines->InsertCellPoint(4);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(1);
+        lines->InsertCellPoint(5);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(2);
+        lines->InsertCellPoint(6);
+        lines->InsertNextCell(2);
+        lines->InsertCellPoint(3);
+        lines->InsertCellPoint(7);
 
         // Set the points and cells as the input data for the line source
-        Hexahedron_Source->SetPoints(points);
-        //lineSource->SetCells(VTK_HEXAHEDRON, hexahedronCells);
+        vtkSmartPointer<vtkPolyData> polydata = vtkSmartPointer<vtkPolyData>::New();
+        polydata->SetPoints(points);
+        polydata->SetLines(lines);
 
-        // Update the mapper with the line source output
-        mapper_Hexahedron->SetInputConnection(Hexahedron_Source->GetOutputPort());
+        // Update the mapper with the polydata
+        vtkSmartPointer<vtkPolyDataMapper> mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+        mapper->SetInputData(polydata);
 
         // Update the actor with the mapper and properties
-
-        actor_Hexahedron->SetMapper(mapper_Hexahedron);
-        set_color_and_thickness(color, thickness, actor_Hexahedron);
+        vtkSmartPointer<vtkActor> actor = vtkSmartPointer<vtkActor>::New();
+        actor->SetMapper(mapper);
+        set_color_and_thickness(color, thickness, actor);
 
         // Add the actor to the renderer
-        renderer->AddActor(actor_Hexahedron);
+        renderer->AddActor(actor);
     }
 
     void Draw_Star(double radius, string color, int thickness) {
@@ -1997,7 +2020,7 @@ namespace {
         vtkNew<MouseInteractorStyleDrawLine> style;
         style->setShapeName(shape_name);
         style->setDrawFlag(true);
-        if (shape_name == "Circle"){
+        if (shape_name == "Circle") {
             QMessageBox messageBox;
             messageBox.setText("Choose Drawning Style");
             QAbstractButton* button = messageBox.addButton(QMessageBox::tr("Mouse Click"), QMessageBox::YesRole);
