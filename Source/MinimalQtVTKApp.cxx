@@ -1013,17 +1013,25 @@ namespace {
 
     void DrawLine(vtkSmartPointer<vtkPoints> points) {
 
-        ///// Point 1  //////
-        lineSource->SetPoint1(points->GetPoint(points->GetNumberOfPoints() - 2));
+        // Point 1
         double* point1 = points->GetPoint(points->GetNumberOfPoints() - 2);
         x1_line = floor(point1[0] * 100) / 100;
         y1_line = floor(point1[1] * 100) / 100;
 
-        ///// Point 2  //////
-        lineSource->SetPoint2(points->GetPoint(points->GetNumberOfPoints() - 1));
+        // Point 2
         double* point2 = points->GetPoint(points->GetNumberOfPoints() - 1);
         x2_line = floor(point2[0] * 100) / 100;
         y2_line = floor(point2[1] * 100) / 100;
+
+        vtkSmartPointer<vtkPoints> linePoints = vtkSmartPointer<vtkPoints>::New();
+        for (double t = 0; t <= 1; t += 0.01) {
+            double x = x1_line + t * (x2_line - x1_line);
+            double y = y1_line + t * (y2_line - y1_line);
+            linePoints->InsertNextPoint(x, y, 0.0);
+        }
+
+        lineSource->SetPoints(linePoints);
+
 
         // Create a mapper and actor for the line
         mapper->SetInputConnection(lineSource->GetOutputPort());
@@ -3581,20 +3589,36 @@ namespace {
     }
 
    void Redo(vtkGenericOpenGLRenderWindow* window) {
-        if (deleted_sources.empty() || deleted_actors.empty()) {
-            return;
-        }
+       if (deleted_sources.empty() || deleted_actors.empty()) {
+           return;
+       }
 
-        vtkSmartPointer<vtkLineSource> source = deleted_sources.top();
-        vtkSmartPointer<vtkActor> actor = deleted_actors.top();
+       // Redo the most recently deleted shape
+       vtkSmartPointer<vtkLineSource> source1 = deleted_sources.top();
+       deleted_sources.pop();
 
-        renderer->AddActor(actor);
-        renderer->AddViewProp(actor);
-        window->AddRenderer(renderer);
+       vtkSmartPointer<vtkActor> actor1 = deleted_actors.top();
+       deleted_actors.pop();
 
-        deleted_sources.pop();
-        deleted_actors.pop();
+       renderer->AddActor(actor1);
+       renderer->AddViewProp(actor1);
+       window->AddRenderer(renderer);
 
-        window->Render();
-    }
+       // If there are more shapes to redo, repeat the process
+       if (!deleted_sources.empty() && !deleted_actors.empty()) {
+           vtkSmartPointer<vtkLineSource> source2 = deleted_sources.top();
+           deleted_sources.pop();
+
+           vtkSmartPointer<vtkActor> actor2 = deleted_actors.top();
+           deleted_actors.pop();
+
+           renderer->AddActor(actor2);
+           renderer->AddViewProp(actor2);
+           window->AddRenderer(renderer);
+       }
+
+       window->Render();
+   }
+
+
 } // namespace
