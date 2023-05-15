@@ -839,8 +839,9 @@ namespace {
         renderer->AddActor(actor_Square);
     }
 
+
     void Draw_Hexahedron(double radius_hex, string color, int thickness)
-      
+       
     {
         // Define the center point of the cube
         double center[3] = { 0.0, 0.0, 0.0 };
@@ -848,7 +849,7 @@ namespace {
         // Define the half side length of the cube
         double half_side = radius_hex / 2.0;
 
-        // Calculate the coordinates of the vertices of the cube
+        // Define the coordinates of the vertices of the cube
         double vertices[8][3] = { {center[0] - half_side, center[1] - half_side, center[2] + half_side},
                                   {center[0] - half_side, center[1] + half_side, center[2] + half_side},
                                   {center[0] + half_side, center[1] + half_side, center[2] + half_side},
@@ -858,56 +859,34 @@ namespace {
                                   {center[0] + half_side, center[1] + half_side, center[2] - half_side},
                                   {center[0] + half_side, center[1] - half_side, center[2] - half_side} };
 
-        vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+        // Define the indices of the vertices that make up each face of the cube
+        int faces[6][4] = { {0, 1, 2, 3},
+                            {1, 5, 6, 2},
+                            {5, 4, 7, 6},
+                            {4, 0, 3, 7},
+                            {3, 2, 6, 7},
+                            {0, 4, 5, 1} };
 
-        // Insert the vertices of the cube as points in the points array
-        for (int i = 0; i < 8; i++)
-        {
-            points->InsertNextPoint(vertices[i]);
-        }
-
-        // Define the lines that connect the vertices of the cube
+        // Define the lines that connect the vertices of each face of the cube
         vtkSmartPointer<vtkCellArray> lines = vtkSmartPointer<vtkCellArray>::New();
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(0);
-        lines->InsertCellPoint(1);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(1);
-        lines->InsertCellPoint(2);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(2);
-        lines->InsertCellPoint(3);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(3);
-        lines->InsertCellPoint(0);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(4);
-        lines->InsertCellPoint(5);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(5);
-        lines->InsertCellPoint(6);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(6);
-        lines->InsertCellPoint(7);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(7);
-        lines->InsertCellPoint(4);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(0);
-        lines->InsertCellPoint(4);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(1);
-        lines->InsertCellPoint(5);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(2);
-        lines->InsertCellPoint(6);
-        lines->InsertNextCell(2);
-        lines->InsertCellPoint(3);
-        lines->InsertCellPoint(7);
+        for (int i = 0; i < 6; i++)
+        {
+            lines->InsertNextCell(5);
+            lines->InsertCellPoint(faces[i][0]);
+            lines->InsertCellPoint(faces[i][1]);
+            lines->InsertCellPoint(faces[i][2]);
+            lines->InsertCellPoint(faces[i][3]);
+            lines->InsertCellPoint(faces[i][0]);
+        }
 
         // Set the points and cells as the input data for the line source
         vtkSmartPointer<vtkPolyData> polydata = vtkSmartPointer<vtkPolyData>::New();
-        polydata->SetPoints(points);
+        polydata->SetPoints(vtkSmartPointer<vtkPoints>::New());
+        polydata->GetPoints()->SetNumberOfPoints(8);
+        for (int i = 0; i < 8; i++)
+        {
+            polydata->GetPoints()->SetPoint(i, vertices[i]);
+        }
         polydata->SetLines(lines);
 
         // Update the mapper with the polydata
